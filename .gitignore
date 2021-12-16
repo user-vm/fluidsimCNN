@@ -1,0 +1,4 @@
+build/
+cudnn/
+logs/
+.idea/
