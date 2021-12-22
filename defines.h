@@ -24,7 +24,7 @@
 #define BLOCK_SIZE 1024
 
 #define USE_CNN 1
-#define USE_CNN_CUDA_ADVECTION 1
+#define USE_CNN_CUDA_ADVECTION 0 //1
 
 #define useJacobiCuda 0
 

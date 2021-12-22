@@ -1243,7 +1243,7 @@ copyDeviceArrayToCudaArrayWrapper_float(float* src, cudaArray* dest){
 
   cudaArrayGetInfo(&destChannelFormatDesc, &destExtent, &flags, dest);
 
-  printf("destExtent (depth,height,width) = %d %d %d \n", destExtent.depth, destExtent.height, destExtent.width);
+  //printf("destExtent (depth,height,width) = %d %d %d \n", destExtent.depth, destExtent.height, destExtent.width);
 
   //checkCudaErrors(cudaBindSurfaceToArray(dstSurface,)); //no, not this for surface objects
 
@@ -1255,7 +1255,7 @@ copyDeviceArrayToCudaArrayWrapper_float(float* src, cudaArray* dest){
   /*cudaError_t cudaErr = cudaDeviceSynchronize();
 
   if(cudaErr!=cudaSuccess){
-    printf("FUCKING FAIL copyCudaArrayToDeviceArrayWrapper -%s \n",cudaGetErrorString(cudaErr));
+    printf("FAIL copyCudaArrayToDeviceArrayWrapper -%s \n",cudaGetErrorString(cudaErr));
     return;}*/
 
   return cudaPeekAtLastError();
@@ -1288,7 +1288,7 @@ copyDeviceArrayToCudaArrayWrapper_double(double* src, cudaArray* dest){
   /*cudaError_t cudaErr = cudaDeviceSynchronize();
 
   if(cudaErr!=cudaSuccess){
-    printf("FUCKING FAIL copyCudaArrayToDeviceArrayWrapper -%s \n",cudaGetErrorString(cudaErr));
+    printf("FAIL copyCudaArrayToDeviceArrayWrapper -%s \n",cudaGetErrorString(cudaErr));
     return;}*/
 
   return cudaPeekAtLastError();

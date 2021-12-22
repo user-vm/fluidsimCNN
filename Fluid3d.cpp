@@ -12,7 +12,7 @@
 #include <helper_cuda_gl.h>
 #include <cuda_fp16.h>
 #include <cudnn.h>
-#include <cnn.cpp> //shut up
+#include <cnn.cpp> //doesn't seem to work otherwise
 #include <toycnn.h>
 #include <memory>
 #include <chrono>
@@ -361,12 +361,12 @@ void PezRender()
     static int thisLoop = 0;
 
     //if(thisLoop == 0)
-    glObjectLabel(GL_TEXTURE, Slabs.Density.Ping.ColorTexture, -1, "DENSITYPINGTEXTURE");
-    glObjectLabel(GL_TEXTURE, Slabs.Density.Pong.ColorTexture, -1, "DENSITYPONGTEXTURE");
-    glObjectLabel(GL_TEXTURE, Slabs.Velocity.Ping.ColorTexture, -1, "VELOCITYPINGTEXTURE");
-    glObjectLabel(GL_TEXTURE, Slabs.Velocity.Pong.ColorTexture, -1, "VELOCITYPONGTEXTURE");
-    glObjectLabel(GL_TEXTURE, Slabs.Temperature.Ping.ColorTexture, -1, "TEMPERATUREPINGTEXTURE");
-    glObjectLabel(GL_TEXTURE, Slabs.Temperature.Pong.ColorTexture, -1, "TEMPERATUREPONGTEXTURE");
+    //glObjectLabel(GL_TEXTURE, Slabs.Density.Ping.ColorTexture, -1, "DENSITYPINGTEXTURE");
+    //glObjectLabel(GL_TEXTURE, Slabs.Density.Pong.ColorTexture, -1, "DENSITYPONGTEXTURE");
+    //glObjectLabel(GL_TEXTURE, Slabs.Velocity.Ping.ColorTexture, -1, "VELOCITYPINGTEXTURE");
+    //glObjectLabel(GL_TEXTURE, Slabs.Velocity.Pong.ColorTexture, -1, "VELOCITYPONGTEXTURE");
+    //glObjectLabel(GL_TEXTURE, Slabs.Temperature.Ping.ColorTexture, -1, "TEMPERATUREPINGTEXTURE");
+    //glObjectLabel(GL_TEXTURE, Slabs.Temperature.Pong.ColorTexture, -1, "TEMPERATUREPONGTEXTURE");
 
     // Blur and brighten the density map:
     bool BlurAndBrighten = true;//false;//true;

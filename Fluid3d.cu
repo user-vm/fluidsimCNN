@@ -404,7 +404,7 @@ __global__ void makePressure(cudaSurfaceObject_t pressurePingSurf,
 
   //if you try automatic interpolation, it probably won't work right if you use 1D textures instead of 3D textures (linear instead of trilinear)
   //these all used to be half
-  //this crap probably segfaults at the texture edges (the edges are obstacles, so it doesn't matter for now)
+  //this  probably segfaults at the texture edges (the edges are obstacles, so it doesn't matter for now)
   /*
   float pC = tex3D<float>(pressurePingTex,x,y,z);
   float pN = tex3D<float>(pressurePingTex,x,y+1,z);

@@ -643,12 +643,12 @@ void UpdateObstacles(SurfacePod obstacles, float time){
     int startZ = (obstacles.Depth - CubeSize.z) / 2;
     int endZ = startZ + CubeSize.z;
 
-    printf("startX = %d\n\n\n", startX);
-    printf("endX = %d\n", endX);
-    printf("startY = %d\n", startY);
-    printf("endY = %d\n", endY);
-    printf("startZ = %d\n", startZ);
-    printf("endZ = %d\n\n\n", endZ);
+    //printf("startX = %d\n\n\n", startX);
+    //printf("endX = %d\n", endX);
+    //printf("startY = %d\n", startY);
+    //printf("endY = %d\n", endY);
+    //printf("startZ = %d\n", startZ);
+    //printf("endZ = %d\n\n\n", endZ);
 
     //SetUniform("CurrentTime", time);
     SetUniform("StartX", startX);
@@ -673,8 +673,8 @@ void UpdateObstacleSpeeds(SurfacePod obstacleSpeeds, SurfacePod obstacles, float
 
     //SetUniform("ObstacleSpeeds", 1);
     //passing a vec3 might not work duer to alignment issues, so we'll just use 3 floats
-    printf("time = %f\n", time);
-    printf("CubeSizeX uniform = %f\n", 1.0f * CubeSize.x / obstacleSpeeds.Width);
+    //printf("time = %f\n", time);
+    //printf("CubeSizeX uniform = %f\n", 1.0f * CubeSize.x / obstacleSpeeds.Width);
     SetUniform("CurrentTime", time);
     SetUniform("CubeSizeX", 1.0f * CubeSize.x / obstacleSpeeds.Width);
     SetUniform("CubeSizeY", 1.0f * CubeSize.y / obstacleSpeeds.Height);

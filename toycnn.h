@@ -17,7 +17,7 @@ public:
   ToyMaxPoolLayer3D(std::vector<int> size_, std::vector<int> stride_);
   ToyMaxPoolLayer3D();
 
-  //MaxPoolLayer3D(int size_[], int stride_[]); //this crap gives them an initial value when the constructor is called, even though they are const
+  //MaxPoolLayer3D(int size_[], int stride_[]); //this  gives them an initial value when the constructor is called, even though they are const
   //MaxPoolLayer3D();
 };
 
@@ -104,7 +104,7 @@ class MaxPoolLayer
 {
 public:
   int size, stride;
-  MaxPoolLayer(int size_, int stride_); //this crap gives them an initial value when the constructor is called, even though they are const
+  MaxPoolLayer(int size_, int stride_); //this  gives them an initial value when the constructor is called, even though they are const
 };
 
 class ConvBiasLayer

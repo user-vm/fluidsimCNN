@@ -2,3 +2,7 @@ build/
 cudnn/
 logs/
 .idea/
+*.o
+fluidsim
+.qmake.stash
+*.pro.user

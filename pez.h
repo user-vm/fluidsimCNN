@@ -15,9 +15,9 @@ extern "C" {
 #include <GL/glew.h>
 #include <GL/glxew.h>
 #include <GL/gl.h>
-#include <GL/glext.h>
-#include <GL/glx.h>
-#include <GL/glxext.h>
+//#include <GL/glext.h>
+//#include <GL/glx.h>
+//#include <GL/glxext.h>
 #include <cuda_gl_interop.h>
 #include <stdbool.h>
 

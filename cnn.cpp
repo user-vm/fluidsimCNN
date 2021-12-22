@@ -552,10 +552,10 @@ cudaError_t DefaultNet<float>::copyCudaArrayToDeviceArrayZeroObstacles(cudaArray
                                             (float*)(this->inputLayer->data) + inputLayerVelDivergenceOffset + inputLayerObstacleOffset, 10));//(this->numIteration==10)?2:(-1));
 
     checkCudaErrors(cudaDeviceSynchronize());
-    printf("obstacles buffer values are \n");
-    checkCudaErrors(printCudaBuffersWrapper_float((float*)(this->inputLayer->data) + inputLayerVelDivergenceOffset + inputLayerObstacleOffset,
-                                  dim3(obstacleExtent.width, obstacleExtent.height, obstacleExtent.depth),
-                                  "obstacles"));
+    //printf("obstacles buffer values are \n");
+    //checkCudaErrors(printCudaBuffersWrapper_float((float*)(this->inputLayer->data) + inputLayerVelDivergenceOffset + inputLayerObstacleOffset,
+    //                              dim3(obstacleExtent.width, obstacleExtent.height, obstacleExtent.depth),
+    //                              "obstacles"));
     checkCudaErrors(cudaDeviceSynchronize());
 
     //checkCudaErrors(cudaDeviceSynchronize());
@@ -1767,7 +1767,7 @@ void DefaultNet<T>::makeNet(int inputDims[], int numBanks, int bankLength){
     /// THE TENSOR OUTPUT BY EACH LAYER (convolution, pooling, etc.) IS CONTAINED IN THE LAYER OBJECT CONTAINING THAT LAYER
     ///
 
-    firstIteration = True;
+    firstIteration = true;
 
     std::unique_ptr<InputLayer3D<T>> in(new InputLayer3D<T>(inputDims));
     in->name = "input";
