@@ -1,5 +1,3 @@
-//#define GL_GLEXT_PROTOTYPES
-//#include <GL/glew.h>
 #include "Utility.h"
 #include <cmath>
 #include <cstdio>
@@ -7,12 +5,11 @@
 #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
 #include <cuda_gl_interop.h>
-//#include <helper_gl.h> //this breaks things in GLEW
 #include <helper_cuda.h>
 #include <helper_cuda_gl.h>
 #include <cuda_fp16.h>
 #include <cudnn.h>
-#include <cnn.cpp> //doesn't seem to work otherwise
+#include <cnn.cpp> //can't get it to work otherwise
 #include <toycnn.h>
 #include <memory>
 #include <chrono>
@@ -125,31 +122,19 @@ PezConfig PezGetConfig()
 void PezInitialize()
 {
 
-    infoMsg("nyeh\n");
-    //findCUDAGLDevice();
-    //int devID = gpuGetMaxGflopsDeviceId();
+    infoMsg("Pez initialized\n");
 
-    //printf("devID = %d", devID);
-
-    //checkCudaErrors(cudaGLSetGLDevice(devID));
-
-
-    //THIS IS NOT NEEDED WHEN RUNNING FROM WITHIN QTCREATOR IF CUDA_VISIBLE_DEVICES IS SET TO 1 IN PROJECTS>BUILD>BUILD ENVIRONMENT ON TWO GPUS
-    //will fail with cudaErrorNoDevice if run with CUDA_VISIBLE_DEVICES=1 when only one GPU is available
-    //still requires CUDA_VISIBLE_DEVICES set to 1 when run from command line on two GPUs (if you don't want the memory mapping to be on both devices; other than that it works fine)
-    //what is done here should still cause the memory of the Titan to still be mapped, which might mean initialization is
-    //should try running with CUDA_VISIBLE_DEVICES=1
     int deviceCount;
     checkCudaErrors(cudaGetDeviceCount(&deviceCount));
 
+    //Note: it's best if this is avoided by setting CUDA_VISIBLE_DEVICES to a single GPU if using a multi-GPU system (ex. "CUDA_VISIBLE_DEVICES=0 ./fluidsim" for GPU number 0)
     if(deviceCount > 1){
         cudaDeviceProp currentDeviceProperties;
         std::string deviceName;
-        std::string deviceToFind = "GeForce GTX 1070";
+        std::string deviceToFind = "GeForce GTX 1070"; //TODO: this is hardcoded for my system.
 
         int deviceToUse = -1;
 
-        //this will probably only work here
         for(int i=0;i<deviceCount;i++){
             checkCudaErrors(cudaGetDeviceProperties(&currentDeviceProperties,i));
             deviceName = std::string(currentDeviceProperties.name);
@@ -165,37 +150,20 @@ void PezInitialize()
         }
 
         if(deviceToUse == -1){
-            printf("Device \"GeForce GTX 1070\" not found. May need to change device name (deviceToFind) in PezInitialize in Fluid3d.cpp; use cudaGetDeviceProperties for device from 0 to cudaGetDeviceCount-1 to see the names of available GPUs on your system.\n");
+            printf("Device "+ deviceToFind +" not found. May need to change device name (deviceToFind) in PezInitialize in Fluid3d.cpp; use cudaGetDeviceProperties for device from 0 to cudaGetDeviceCount-1 to see the names of available GPUs on your system.\n");
             exit(0);
         }
 
         checkCudaErrors(cudaGLSetGLDevice(deviceToUse));
         checkCudaErrors(cudaSetDevice(deviceToUse));
 
-        printf("deviceName = %s; deviceToUse = %d\n",deviceName.c_str(),deviceToUse);
-
-        //exit(0);
+        infoMsg("deviceName = %s; deviceToUse = %d\n",deviceName.c_str(),deviceToUse);
     }
     else{
         checkCudaErrors(cudaGLSetGLDevice(0));
         checkCudaErrors(cudaSetDevice(0));
-        printf("Just one GPU found.\n");
+        infoMsg("Just one GPU found.\n");
     }
-
-    //this isn't robust, should use the device names
-    /*
-  if(deviceCount == 1){
-    checkCudaErrors(cudaGLSetGLDevice(0));
-    checkCudaErrors(cudaSetDevice(0));
-  else{
-    checkCudaErrors(cudaGLSetGLDevice(1));
-    checkCudaErrors(cudaSetDevice(1));
-  }
-  */
-
-    //exit(0);
-
-    infoMsg("meh\n");
 
     GLenum err = glGetError();
     std::stringstream errorBuffer;
@@ -273,20 +241,9 @@ void PezInitialize()
     CreateObstacles(Surfaces.Obstacles, Surfaces.ObstacleSpeeds);
     ClearSurface(Slabs.Temperature.Ping, AmbientTemperature);
 
-    //glDisable(GL_DEPTH_TEST);
-    //glDisable(GL_CULL_FACE);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     pezCheck(OpenGLError);
-
-    //register the main OpenGL buffer with CUDA (actually how about no)
-    //checkCudaErrors(cudaGraphicsGLRegisterBuffer(&cuda_buffer_resource, bufferID, cudaGraphicsMapFlagsNone));
-
-    //register relevant FBOv buffers for the CUDA projection phase
-    //checkCudaErrors(cudaGraphicsGLRegisterBuffer(&pressurePing_buffer_resource, Slabs.Pressure.Ping.FboHandle, cudaGraphicsMapFlagsNone));//pressurePing_buffer_resource
-    //checkCudaErrors(cudaGraphicsGLRegisterBuffer(&pressurePong_buffer_resource, Slabs.Pressure.Pong.FboHandle, cudaGraphicsMapFlagsNone));
-    //checkCudaErrors(cudaGraphicsGLRegisterBuffer(&divergence_buffer_resource, Surfaces.Divergence.FboHandle, cudaGraphicsMapFlagsNone));
-    //checkCudaErrors(cudaGraphicsGLRegisterBuffer(&obstacles_buffer_resource, Surfaces.Obstacles.FboHandle, cudaGraphicsMapFlagsNone));
 
     //register all the 3D textures corresponding to the FBOs
     checkCudaErrors(cudaGraphicsGLRegisterImage(&pressurePing_texture_resource, Slabs.Pressure.Ping.ColorTexture, GL_TEXTURE_3D,cudaGraphicsRegisterFlagsNone));
@@ -304,20 +261,15 @@ void PezInitialize()
     memset(&pressurePingResDesc, 0, sizeof(pressurePingResDesc));
     pressurePingResDesc.resType = cudaResourceTypeArray;
 
-    //this is useless, why did you write it
-    //pressurePongResDesc = cudaCreateChannelDesc(32,0,0,0,cudaChannelFormatKindFloat);
     memset(&pressurePongResDesc, 0, sizeof(pressurePongResDesc));
     pressurePongResDesc.resType = cudaResourceTypeArray;
 
-
-    //velocityPingResDesc = cudaCreateChannelDesc(32,32,32,32,cudaChannelFormatKindFloat); //this makes no sense
     memset(&velocityPingResDesc, 0, sizeof(velocityPingResDesc));
     velocityPingResDesc.resType = cudaResourceTypeArray;
 
     memset(&velocityPongResDesc, 0, sizeof(velocityPongResDesc));
     velocityPongResDesc.resType = cudaResourceTypeArray;
 
-    //divergenceResDesc = cudaCreateChannelDesc(32,32,32,0,cudaChannelFormatKindFloat);
     memset(&divergenceResDesc, 0, sizeof(divergenceResDesc));
     divergenceResDesc.resType = cudaResourceTypeArray;
 
@@ -332,13 +284,6 @@ void PezInitialize()
     memset(&texDesc, 0, sizeof(texDesc));
     texDesc.readMode = cudaReadModeElementType;
 
-    //the cudnn stuff
-
-    //initialize class instances etc.
-    //use unique pointers later
-    //dim3 divergenceSize = dim3(Surfaces.Divergence.Width, Surfaces.Divergence.Height, Surfaces.Divergence.Depth);
-    //dim3 hiddenSize = dim3(Surfaces.Divergence.Width/2, Surfaces.Divergence.Height/2, Surfaces.Divergence.Depth/2);
-
 #if USE_CNN==0
     toyCNN = std::unique_ptr<ToyCNN>(new ToyCNN(divergenceSize, hiddenSize));
 #else
@@ -350,7 +295,6 @@ void PezInitialize()
         printf("Error: No trained model for %d banks.", numberOfBanks);
         exit(0);}
 #endif
-    //tensor descriptors etc.
 }
 
 void PezRender()
@@ -360,16 +304,8 @@ void PezRender()
 
     static int thisLoop = 0;
 
-    //if(thisLoop == 0)
-    //glObjectLabel(GL_TEXTURE, Slabs.Density.Ping.ColorTexture, -1, "DENSITYPINGTEXTURE");
-    //glObjectLabel(GL_TEXTURE, Slabs.Density.Pong.ColorTexture, -1, "DENSITYPONGTEXTURE");
-    //glObjectLabel(GL_TEXTURE, Slabs.Velocity.Ping.ColorTexture, -1, "VELOCITYPINGTEXTURE");
-    //glObjectLabel(GL_TEXTURE, Slabs.Velocity.Pong.ColorTexture, -1, "VELOCITYPONGTEXTURE");
-    //glObjectLabel(GL_TEXTURE, Slabs.Temperature.Ping.ColorTexture, -1, "TEMPERATUREPINGTEXTURE");
-    //glObjectLabel(GL_TEXTURE, Slabs.Temperature.Pong.ColorTexture, -1, "TEMPERATUREPONGTEXTURE");
-
     // Blur and brighten the density map:
-    bool BlurAndBrighten = true;//false;//true;
+    bool BlurAndBrighten = true;
     if (BlurAndBrighten) {
         glDisable(GL_BLEND);
         glBindFramebuffer(GL_FRAMEBUFFER, Surfaces.BlurredDensity.FboHandle);
@@ -411,8 +347,6 @@ void PezRender()
         glBindTexture(GL_TEXTURE_3D, Surfaces.BlurredDensity.ColorTexture);
     else{
         glBindTexture(GL_TEXTURE_3D, Slabs.Density.Ping.ColorTexture);
-        //if(thisLoop == 0)
-        //glObjectLabel(GL_TEXTURE_3D, Slabs.Density.Ping.ColorTexture, -1, "DENSITYPINGTEXTURE");
     }
 
     thisLoop++;
@@ -443,32 +377,6 @@ void PezRender()
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_3D, 0);
     glActiveTexture(GL_TEXTURE0);
-/*
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_3D, Surfaces.LightCache.ColorTexture);
-
-    glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_3D, Slabs.Velocity.Pong.ColorTexture);
-
-    glUseProgram(RaycastVelProgram);
-    SetUniform("ModelviewProjection", Matrices.ModelviewProjection);
-    SetUniform("Modelview", Matrices.Modelview);
-    SetUniform("ViewMatrix", Matrices.View);
-    SetUniform("ProjectionMatrix", Matrices.Projection);
-    SetUniform("ViewSamples", ViewSamples);
-    SetUniform("EyePosition", EyePosition);
-    SetUniform("Density", 0);
-    SetUniform("LightCache", 1);
-    SetUniform("RayOrigin", Vector4(transpose(Matrices.Modelview) * EyePosition).getXYZ());
-    SetUniform("FocalLength", 1.0f / std::tan(FieldOfView / 2));
-    SetUniform("WindowSize", float(cfg.Width), float(cfg.Height));
-    SetUniform("StepSize", sqrtf(2.0) / float(ViewSamples));
-    SetUniform("Velocity", 2);
-    SetUniform("velocityColor", Vector3(0.0f, 1.0f, 0.0f));
-    glDrawArrays(GL_POINTS, 0, 1);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_3D, 0);
-    glActiveTexture(GL_TEXTURE0);*/
 
     pezCheck(OpenGLError);
 }
@@ -482,17 +390,10 @@ Jacobi_CUDA(cudaSurfaceObject_t pressurePingArray,
             dim3 textureDims,
             float alpha, float inverseBeta, int numLoops, int currentLoop);
 
-/*
-Jacobi_CUDA(pressurePingCudaArray, pressurePing_texture_resource, pressurePongCudaArray, pressurePong_texture_resource,
-            divergenceCudaArray, divergence_texture_resource, obstaclesCudaArray, obstacles_texture_resource);
-*/
-
 size_t getSurfacePodSize(SurfacePod surfacePod){
 
     return surfacePod.Width * surfacePod.Height * surfacePod.Depth * sizeof(GLsizei);
 }
-
-//texture<float,1,cudaReadModeElementType> pressurePingTex, pressurePongTex, divergenceTex, obstaclesTex;
 
 void swapCudaBuffers(float *&a, float*&b){
     float* temp;
@@ -533,9 +434,6 @@ extern "C" cudaError_t applyInflowsNotStaggered_float(float* velocityIn, cudaSur
 
 extern "C" cudaError_t applyControlledInflowsStaggered_float(float* velocityIn, cudaSurfaceObject_t densityPingSurf, float* obstacles, int posX, int posY, int posZ, int radius, float densityValue, float temperatureValue, float3 velocityValue, float* temperature, float* inflowVelocity, float* inflowDensity, float* inflowTemperature, dim3 domainSize, float dt);
 
-//extern "C" cudaError_t initializeInflowsStaggered_float(float* inflowVelocity, float* inflowDensity, dim3 domainSize, int3 center, int radius);
-//extern "C" cudaError_t initializeInflowsNotStaggered_float(float* inflowVelocity, float* inflowDensity, dim3 domainSize, int3 center, int radius);
-
 extern "C" cudaError_t initializeInflowsStaggered_float(float* inflowVelocity, float* inflowDensity, float *inflowTemperature, dim3 domainSize, dim3 center, int radius, float ambTemp);
 extern "C" cudaError_t initializeInflowsNotStaggered_float(float* inflowVelocity, float* inflowDensity, float* inflowTemperature, dim3 domainSize, dim3 center, int radius, float ambTemp);
 
@@ -573,10 +471,6 @@ struct cudaTextureDesc densityPingTexDesc, densityPongTexDesc;
 float buoyancyConstantAlpha = 0.01f, buoyancyConstantBeta = 0.01f; //NEED TO SET THESE TO A REASONABLE VALUE
 float ambTemp = 0.0f; //this shouldn't matter as long as the temperature is relative to the value
 float3 gravity = {.x = 0.0f, .y = -9.81f, .z = 0.0f};
-//float3 gravity;
-//gravity.x = 0.0f;
-//gravity.y = -9.81f;
-//gravity.z = 0.0f;
 
 float* velTest;
 
@@ -604,7 +498,7 @@ void CudaSimulationLoop(int radius = 16){
 
     }
 
-    printf("\n\n\n################### LOOP %d #######################\n\n\n", currentLoop);
+    infoMsg("\n\n\n################### LOOP %d #######################\n\n\n", currentLoop);
 
     infoMsg("mark CudaSimulationLoop");
     checkCudaErrors(cudaGraphicsMapResources(1, &densityPing_texture_resource));
@@ -646,7 +540,7 @@ void CudaSimulationLoop(int radius = 16){
 
         domainSizeTotal = densityExtent.width * densityExtent.height * densityExtent.depth;
 
-        printf("\n\n\nvelocitySizeTotal = %d, domainSizeTotal = %d\n\n\n", velocitySizeTotal, domainSizeTotal);
+        infoMsg("\n\n\nvelocitySizeTotal = %d, domainSizeTotal = %d\n\n\n", velocitySizeTotal, domainSizeTotal);
 
         //allocate pressure, velocity divergence, and obstacles IN A BLOCK, TOGETHER, in that order
         checkCudaErrors(cudaMalloc(&input, 3 * domainSizeTotal * sizeof(float)));
@@ -675,11 +569,9 @@ void CudaSimulationLoop(int radius = 16){
         checkCudaErrors(cudaMemset(inflowDensity, 0, domainSizeTotal*sizeof(float)));
         checkCudaErrors(cudaMemset(inflowTemperature, 0, domainSizeTotal*sizeof(float)));
         if(useStaggered){
-            //checkCudaErrors(initializeInflowsStaggered_float(inflowVelocity, inflowDensity, domainSize, make_int3(domainSize.x/2, domainSize.y/2, domainSize.z/2), min(domainSize.x, domainSize.y, domainSize.z)/8));
             checkCudaErrors(initializeInflowsStaggered_float(inflowVelocity, inflowDensity, inflowTemperature, domainSize, center, min(domainSize.x, domainSize.y, domainSize.z)/8, ambTemp));}
         else
         {
-            //checkCudaErrors(initializeInflowsNotStaggered_float(inflowVelocity, inflowDensity, domainSize, make_int3(domainSize.x/2, domainSize.y/2, domainSize.z/2), min(domainSize.x, domainSize.y, domainSize.z)/8));
             checkCudaErrors(initializeInflowsNotStaggered_float(inflowVelocity, inflowDensity, inflowTemperature, domainSize, center, min(domainSize.x, domainSize.y, domainSize.z)/8, ambTemp));
         }
 #undef min
@@ -687,19 +579,6 @@ void CudaSimulationLoop(int radius = 16){
 
     densityPingResDesc.res.array.array = densityPingCudaArray;
     densityPongResDesc.res.array.array = densityPongCudaArray;
-
-    //if(currentLoop%2==0){
-    if(0){
-        checkCudaErrors(cudaCreateSurfaceObject(&densityPingSurf, &densityPingResDesc));
-        checkCudaErrors(cudaCreateTextureObject(&densityPingTex, &densityPingResDesc, &densityPingTexDesc, NULL));
-        checkCudaErrors(cudaCreateSurfaceObject(&densityPongSurf, &densityPongResDesc));
-        checkCudaErrors(cudaCreateTextureObject(&densityPongTex, &densityPongResDesc, &densityPongTexDesc, NULL));}
-    else{
-        checkCudaErrors(cudaCreateSurfaceObject(&densityPongSurf, &densityPingResDesc));
-        checkCudaErrors(cudaCreateTextureObject(&densityPongTex, &densityPingResDesc, &densityPingTexDesc, NULL));
-        checkCudaErrors(cudaCreateSurfaceObject(&densityPingSurf, &densityPongResDesc));
-        checkCudaErrors(cudaCreateTextureObject(&densityPingTex, &densityPongResDesc, &densityPongTexDesc, NULL));
-    }
 
     //--- PROPER LOOP STARTS HERE ---
 
@@ -722,9 +601,6 @@ void CudaSimulationLoop(int radius = 16){
     auto currentTime = std::chrono::steady_clock::now();
     auto dt = ((std::chrono::duration<float>)(currentTime - lastTime)).count();//((std::chrono::duration<double>)(lastTime - currentTime)).count();
     lastTime = currentTime;
-
-    //dt = 1/60.0;
-    //dt = 0.25f;//0.25f;
 
     if(useJacobiCuda){
         dt = 0.25f;
@@ -750,110 +626,27 @@ void CudaSimulationLoop(int radius = 16){
 
         int domainSizeTotal = domainSize.x * domainSize.y * domainSize.z;
 
-        printf("velocitySize.x = %d, velocitySize.y = %d, velocitySize.z = %d\n", velocitySize.x, velocitySize.y, velocitySize.z);
+        infoMsg("velocitySize.x = %d, velocitySize.y = %d, velocitySize.z = %d\n", velocitySize.x, velocitySize.y, velocitySize.z);
 
         checkCudaErrors(setBufferValuesWrapper_float(velocityIn, pressure, velocitySize, domainSize));
-        /*
-        velocityCPU = (float*)(malloc(sizeof(float)*velocitySizeTotal));
-        pressureCPU = (float*)(malloc(sizeof(float)*domainSizeTotal));
-
-        checkCudaErrors(cudaMemcpy(velocityCPU, velocityIn, sizeof(float)*velocitySizeTotal, cudaMemcpyDeviceToHost));
-        checkCudaErrors(cudaMemcpy(pressureCPU, pressure, sizeof(float)*domainSizeTotal, cudaMemcpyDeviceToHost));
-
-        std::ofstream outFile_initial;
-
-        outFile_initial.open("UPred_pPred_CPP_initial_26-09-2018_05-40.txt");
-
-        outFile_initial<<"UPred\n";
-
-        //now write the values to file
-        for(int i=0; i<velocitySizeTotal; i++) //doesn't account for different sizes of velocity tensor
-            outFile_initial<<velocityCPU[i]<<"\n";
-
-        outFile_initial<<"pPred\n";
-
-        for(int i=0;i<domainSize.x*domainSize.y*domainSize.z;i++)
-            outFile_initial<<pressureCPU[i]<<"\n";
-
-        //exit(0);
-*/
-
 
         checkCudaErrors(calculateDivergenceStaggeredWrapper_float(velocityIn, divergence, CellSize, domainSize));
         defaultNet->loadInput(input, pressure, velocityIn, domainSize, velocitySize);
         defaultNet->forward();
 
         checkCudaErrors(cudaDeviceSynchronize());
-        /*
-        float* inputCPU = (float*)(malloc(sizeof(float)*domainSizeTotal*3));
-        checkCudaErrors(cudaMemcpy(inputCPU, defaultNet->inputLayer->data, 3*sizeof(float)*domainSizeTotal, cudaMemcpyDeviceToHost));
-
-        std::ofstream outFile;
-
-        outFile.open("input_conv_CPP.txt");
-
-        for(int i=0;i<3*domainSizeTotal;i++)
-            outFile<<inputCPU[i]<<"\n";
-applyControlledInflowsStaggered_float
-        outFile.close();
-        exit(0);
-*/
-
-        /*
-        float* divergenceCPU = (float*)(malloc(sizeof(float)*domainSizeTotal));
-        checkCudaErrors(cudaMemcpy(divergenceCPU, divergence, sizeof(float)*domainSizeTotal, cudaMemcpyDeviceToHost));
-
-        std::ofstream outFile;
-
-        outFile.open("divergence_CPP.txt");
-
-        for(int i=0;i<domainSizeTotal;i++)
-            outFile<<divergenceCPU[i]<<"\n";
-
-        outFile.close();
-        exit(0);
-        */
-        //now copy the values to the CPU
-
-        /*
-        velocityCPU = (float*)(malloc(sizeof(float)*velocitySizeTotal));
-        pressureCPU = (float*)(malloc(sizeof(float)*domainSizeTotal));
-
-        checkCudaErrors(cudaMemcpy(velocityCPU, velocityIn, sizeof(float)*velocitySizeTotal, cudaMemcpyDeviceToHost));
-        checkCudaErrors(cudaMemcpy(pressureCPU, pressure, sizeof(float)*domainSizeTotal, cudaMemcpyDeviceToHost));
-
-        //outFile_initial.close();
-
-        std::ofstream outFile;
-
-        outFile.open("UPred_pPred_CPP_27-09-2018_09-40.txt");
-
-        outFile<<"UPred\n";
-
-        //now write the values to file
-        for(int i=0; i<velocitySizeTotal; i++) //doesn't account for different sizes of velocity tensor
-            outFile<<velocityCPU[i]<<"\n";
-
-        outFile<<"pPred\n";
-
-        for(int i=0;i<domainSize.x*domainSize.y*domainSize.z;i++)
-            outFile<<pressureCPU[i]<<"\n";
-
-        outFile.close();
-
-        exit(0);*/
     }
 
     //there should be some inflows or something (at what point in the loop?)
 
-    printf("velocityIn at beginning -> %p", velocityIn);
+    infoMsg("velocityIn at beginning -> %p", velocityIn);
 
     //velocityDissipation is not used. Density dissipation might be used
     if(useStaggered){
         domainSize = dim3(densityExtent.width, densityExtent.height, densityExtent.depth);
         velocitySize = dim3(densityExtent.width+1, densityExtent.height+1, densityExtent.depth+1);
         checkCudaErrors(cudaDeviceSynchronize());
-        //checkCudaErrors(advectCudaStaggeredWrapper_float(velocityIn, pressureIn, pressureOut, dt)); //torch version does not advect pressure; chaging that would probably break the inference
+        //torch version does not advect pressure; chaging that would probably break the inference
 
         checkCudaErrors(cudaDeviceSynchronize());
         checkCudaErrors(advectCudaStaggeredWrapper_float(velocityIn, temperatureIn, temperatureOut, obstacles, domainSize, CellSize, dt)); //this fails too somtimes if the density advection doesn't
@@ -867,20 +660,14 @@ applyControlledInflowsStaggered_float
             exit(0);}*/
 
 
-        checkCudaErrors(advectDensityCudaStaggeredWrapper_float(velocityIn, densityPingTex, densityPongSurf, obstacles, domainSize, CellSize, dt)); //ERROR HERE (not on first loop)
-        checkCudaErrors(advectDensityCudaStaggeredWrapper_float(velocityIn, densityPingTex, densityPongSurf, obstacles, domainSize, CellSize, dt)); //ERROR HERE (not on first loop)
-        //checkCudaErrors(advectDensityCudaStaggeredWrapper_float(velTest, densityPingTex, densityPongSurf, obstacles, domainSize, CellSize, dt)); //ERROR HERE (not on first loop)
+        checkCudaErrors(advectDensityCudaStaggeredWrapper_float(velocityIn, densityPingTex, densityPongSurf, obstacles, domainSize, CellSize, dt));
+        checkCudaErrors(advectDensityCudaStaggeredWrapper_float(velocityIn, densityPingTex, densityPongSurf, obstacles, domainSize, CellSize, dt));
         checkCudaErrors(cudaDeviceSynchronize());
-        checkCudaErrors(advectVelocityCudaStaggeredWrapper_float(velocityIn, velocityOut, obstacles, CellSize, domainSize, dt)); //this might need to be at the end, depending on how it is in the torch version. //->out of resources
-        //checkCudaErrors(cudaErrorInvalidValue);
-        checkCudaErrors(cudaDeviceSynchronize()); //ERROR HERE on first loop
+        checkCudaErrors(advectVelocityCudaStaggeredWrapper_float(velocityIn, velocityOut, obstacles, CellSize, domainSize, dt)); //this might need to be at the end, depending on how it is in the torch version. //->out of resources error
+        checkCudaErrors(cudaDeviceSynchronize());
         //if swapCudaBuffers is done twice, velocityIn should be continguous with pressure and temperature
         swapCudaBuffers(velocityIn, velocityOut); //this DOES work
 
-        //if(currentLoop <10){float
-        //might need to move this back to the beginning (change to densityPingSurf)
-        //checkCudaErrors(applyInflowsStaggered_float(velocityIn, densityPongSurf, obstacles, temperatureIn, inflowVelocity, inflowDensity, inflowTemperature, domainSize, dt)); //takes obstacles so that density is not inflowed into occupied cells; need to ensure non-negative density values after outflows are applied
-        //}
         checkCudaErrors(applyControlledInflowsStaggered_float(velocityIn, densityPongSurf, obstacles, ImpulsePosition.getX(), ImpulsePosition.getY(), ImpulsePosition.getZ(), SplatRadius, ImpulseDensity, ImpulseTemperature, velocityValue, temperatureIn, inflowVelocity, inflowDensity, inflowTemperature, domainSize, dt));
 
         checkCudaErrors(cudaDeviceSynchronize());
@@ -920,32 +707,6 @@ applyControlledInflowsStaggered_float
 
     checkCudaErrors(cudaDeviceSynchronize());
 
-    //checkCudaErrors(printCudaBuffersWrapper3D_float(velocityIn, velocitySize, "velocityIn"));
-    //printf("Exiting (%s:%d, %s)",__FILE__,__LINE__,__FUNCTION__);
-    //exit(0);
-
-    //printf("\n\n\n\n\n\n\n");
-
-    //infoMsg("mark CNNProjectionCudaWrapper\n");
-
-    //defaultNet->forward(divergenceCudaArray, pressurePongCudaArray);
-    //this might actually require the divergence of the pressure (for some reason)
-
-    //printf("pressure2 = %p\n", pressure2);
-    //
-    // DOES NOT WORK WITHOUT THIS!
-    //
-    //defaultNet->getOutput(pressure2);
-    //printf("pressure2 = %p\n", pressure2);
-
-    //checkCudaErrors(printCudaBuffersWrapper3D_float(velocityIn, velocitySize, "velocityIn"));
-    //printf("Exiting (%s:%d, %s)",__FILE__,__LINE__,__FUNCTION__);
-    //exit(0);
-
-    //need to copy pressure2 to pressure instead of swapping, at least until not allocating the output in DefaultNet works
-    //cudaMemcpy(pressure, pressure2, domainSize.x*domainSize.y*domainSize.z*sizeof(float), cudaMemcpyDeviceToDevice);
-    //swapCudaBuffers(pressure, pressure2);
-
     /*
     printf("Exiting...");
     exit(1);
@@ -966,28 +727,16 @@ applyControlledInflowsStaggered_float
     checkCudaErrors(cudaGraphicsUnmapResources(1, &densityPing_texture_resource, 0));
     checkCudaErrors(cudaGraphicsUnmapResources(1, &densityPong_texture_resource, 0));
 
-    //k = k%2;
-
-    //SubtractGradient(Slabs.Velocity.Ping, Slabs.Pressure.Ping, Surfaces.Obstacles, Slabs.Velocity.Pong); //<--- replace with kernel version
-    //SwapSurfaces(&Slabs.Velocity);
-
     if(useJacobiCuda){
         //the gradient subtraction does not work yet, so do not use
         float alpha = -CellSize * CellSize;
-        //printf("\ninverseBeta = %f", inverseBeta);
         int numLoops = NumJacobiIterations; //40
-        //float inverseBeta = 0.1666f; //same value as in Utility.cpp
         checkCudaErrors(JacobiCudaBuffers_float(pressure, divergence, obstacles, domainSize, alpha, inverseBeta, numLoops));
     }
     else{
-
-        //printf("velocitySize = (%d, %d, %d)\n", velocitySize.x, velocitySize.y, velocitySize.z);
         defaultNet->loadInput(input, pressure, velocityIn, domainSize, velocitySize);
         defaultNet->forward();
 
-        checkCudaErrors(cudaDeviceSynchronize());
-
-        //checkCudaErrors(checkGradientFactorWrapper_float(pressure, velocityIn, domainSize));
         checkCudaErrors(cudaDeviceSynchronize());
 
         if(useStaggered)
@@ -995,19 +744,7 @@ applyControlledInflowsStaggered_float
         else
             checkCudaErrors(subtractGradientNotStaggeredCuda_float(velocityIn, pressure, density, obstacles, velocitySize, CellSize, dt));
     }
-
-    //SwapSurfaces(&Slabs.Density);
-    //SimulateFluid = !SimulateFluid;
-
     checkCudaErrors(cudaDeviceSynchronize());
-
-    //calculateDivergenceStaggeredWrapper_float(velocityIn, divergence, CellSize, domainSize);
-    //checkDivergenceWrapper_float(divergence, domainSize);
-
-    checkCudaErrors(cudaDeviceSynchronize());
-
-    //exit(0);
-
     currentLoop++;
 }
 
@@ -1019,7 +756,7 @@ void CNNProjectionCudaWrapper(SurfacePod pressurePing, SurfacePod divergence, Su
 
     static int currentLoop = 0;
 
-    infoMsg("mark CNNProjectionCudaWrapper\n");
+    infoMsg("start CNNProjectionCudaWrapper\n");
 
     if(currentLoop == 0){
     checkCudaErrors(cudaGraphicsMapResources(1, &pressurePing_texture_resource));
@@ -1043,197 +780,36 @@ void CNNProjectionCudaWrapper(SurfacePod pressurePing, SurfacePod divergence, Su
 
     checkCudaErrors(cudaGraphicsMapResources(1, &velocityPong_texture_resource));
     checkCudaErrors(cudaGraphicsSubResourceGetMappedArray(&velocityPongCudaArray, velocityPong_texture_resource,0,0));}
-/*
-    //printCudaBuffersWrapper3D_float(velocityPingCudaArray,);
-    //if(currentLoop == 1){
-        printf("first\n");
-        printf("velocityPingCudaArray at iteration number %d\n", currentLoop);
-        checkCudaErrors(printDataCudaArrayContents3DWrapper(velocityPingCudaArray));
-        checkCudaErrors(cudaDeviceSynchronize());
-        //exit(0);
-        printf("\n\n");
-        printf("divergenceCudaArray at iteration number %d\n", currentLoop);
-        checkCudaErrors(printDataCudaArrayContentsWrapper(divergenceCudaArray));
-        checkCudaErrors(cudaDeviceSynchronize());
-        printf("\n\n");
-        printf("pressure at iteration number %d\n", currentLoop);
-        printCudaBuffersWrapper_float(defaultNet->pressure, dim3(64,64,64), "pressure");
-        checkCudaErrors(cudaDeviceSynchronize());
-        printf("\n\n");//}
-        //*/
-
-    //copy velocity to cpu, save it
-
-    //need to make sure the divergence computation matches the torch version
-
-    //addScalarToVelocity();
-
-    //checkCudaErrors(copyCudaArrayToDeviceArrayWrapper3D_float(velocityPingCudaArray, velocityPingBuffer));
-
-    //copy velocityPingCudaArray to a GPU buffer
-    /*
-    if(currentLoop == 0)
-        checkCudaErrors(cudaMalloc(&velocityPingBuffer, 3*velocityPing.Width*velocityPing.Height*velocityPing.Depth*sizeof(float)));
-
-    checkCudaErrors(copyCudaArrayToDeviceArrayWrapper3D_float(velocityPingCudaArray, velocityPingBuffer));*/
 
     //copy this GPU buffer to the CPU
-
     defaultNet->loadInput(pressurePingCudaArray, obstaclesCudaArray, divergenceCudaArray, pressurePongCudaArray, velocityPingCudaArray, velocityPingCudaArray);
 
-    /*
-    if(currentLoop %2 == 0)
-        defaultNet->loadInput(pressurePingCudaArray, obstaclesCudaArray, divergenceCudaArray, pressurePongCudaArray, velocityPingCudaArray, velocityPongCudaArray);
-    else
-        defaultNet->loadInput(pressurePingCudaArray, obstaclesCudaArray, divergenceCudaArray, pressurePongCudaArray, velocityPongCudaArray, velocityPingCudaArray);
-    */
-/*
-    //if(currentLoop == 0){
-        printf("last\n");
-        printf("velocityPingCudaArray at iteration number %d\n", currentLoop);
-        checkCudaErrors(printDataCudaArrayContents3DWrapper(velocityPingCudaArray));
-        checkCudaErrors(cudaDeviceSynchronize());
-        printf("\n\n");
-        printf("divergenceCudaArray at iteration number %d\n", currentLoop);
-        checkCudaErrors(printDataCudaArrayContentsWrapper(divergenceCudaArray));
-        checkCudaErrors(cudaDeviceSynchronize());
-        printf("\n\n");
-        printf("pressure at iteration number %d\n", currentLoop);
-        //printCudaBuffersWrapper_float(defaultNet->pressure, dim3(64,64,64), "pressure");
-        checkCudaErrors(cudaDeviceSynchronize());
-        printf("\n\n");//}
-*/
     checkCudaErrors(cudaDeviceSynchronize());
 
     defaultNet->forward(false, true, (float)(currentLoop));
 
-    //printf("");
-
-    //this has been moved to DefaultNet->forward()
-    //if(useStaggered)
-        //subtractGradientStaggeredCuda_float(defaultNet->velocity, defaultNet->pressure, NULL, defaultNet->divergence, dim3(defaultNet->outputLayer->tensorDims[4], defaultNet->outputLayer->tensorDims[3], defaultNet->outputLayer->tensorDims[2]), CellSize, dt); //NULL corresponds to the density, which isn't used anyway
-    //else
-    //    subtractGradientNotStaggeredCuda_float(defaultNet->velocity, defaultNet->pressure, NULL, defaultNet->divergence, dim3(defaultNet->outputLayer->tensorDims[4], defaultNet->outputLayer->tensorDims[3], defaultNet->outputLayer->tensorDims[2]), CellSize, dt); //needs velocity and pressure; they are already there
-
-    //checkCudaErrors(copyCudaArrayToDeviceArrayWrapper3D_float(velocityPingCudaArray, velocityPingBuffer));
-
-    //subtractGradientNotStaggeredCuda_float(float* velocity, float* pressure, float* density, float* obstacles, dim3 velocitySize, float cellDim){
     defaultNet->getOutput(pressurePingCudaArray);
-    //need to overwrite velocityPing with the gradient-subtracted version
 
+    //need to overwrite velocityPing with the gradient-subtracted version
     checkCudaErrors(copyDeviceArrayToCudaArray3DWrapper_float(defaultNet->velocity, velocityPingCudaArray));
 
-    //checkCudaErrors(printDataCudaArrayContents3DWrapper(velocityPingCudaArray));
-
-    //copy the projected velocity to a CPU buffer
-    //checkCudaErrors(copyCudaArrayToDeviceArrayWrapper3D_float(velocityPingCudaArray, velocityPingBuffer));
-    //checkCudaErrors(cudaMemcpy(velocityPingBufferCPU2, velocityPingBuffer, 3*velocityPing.Width*velocityPing.Height*velocityPing.Depth*sizeof(float), cudaMemcpyDeviceToHost));
-
-    //print the GPU buffers side by side
-    //checkCudaErrors(printCudaBuffersSideBySideWrapper3D_float(velocityPingBuffer, defaultNet->velocity, dim3(velocityPing.Width, velocityPing.Height, velocityPing.Depth), "velocityPingBefore", "velocityPingAfter"));
-
-    /*
-    if(currentLoop%2==0)
-        checkCudaErrors(copyDeviceArrayToCudaArray3DWrapper_float(defaultNet->velocity, velocityPongCudaArray));
-    else
-        checkCudaErrors(copyDeviceArrayToCudaArray3DWrapper_float(defaultNet->velocity, velocityPingCudaArray));
-    */
-
-    //printCudaBuffersWrapper3D_float(defaultNet->velocity, dim3(64,64,64), "velocityPing");
-/*
-    if(currentLoop == 1){
-        printf("eh\n");
-        printf("velocityPingCudaArray at iteration number %d\n", currentLoop);
-        checkCudaErrors(printDataCudaArrayContents3DWrapper(velocityPingCudaArray));
-        checkCudaErrors(cudaDeviceSynchronize());
-        printf("\n\n");
-        printf("divergenceCudaArray at iteration number d\n", currentLoop);
-        checkCudaErrors(printDataCudaArrayContentsWrapper(divergenceCudaArray));
-        checkCudaErrors(cudaDeviceSynchronize());
-        printf("\n\n");
-        printf("pressure at iteration number %d\n", currentLoop);
-        printCudaBuffersWrapper_float(defaultNet->pressure, dim3(64,64,64), "pressure");
-        checkCudaErrors(cudaDeviceSynchronize());
-        printf("\n\n");}
-*/
     currentLoop++;
 
     checkCudaErrors(cudaDeviceSynchronize());
-
-    //toyCNN->ForwardPropagationV2(divergenceCudaArray, pressurePingSurf); //this is the version with surfaces (and maybe textures) instead of the target (and maybe source cudaArrays)
-
-    //printCudaBuffersWrapper_float(defaultNet->pressure, dim3(64,64,64), "pressure");
-    //printCudaBuffersWrapper3D_float(defaultNet->velocity, dim3(64,64,64), "velocity");
-/*
-    //if(currentLoop == 0){
-    checkCudaErrors(cudaGraphicsUnmapResources(1, &pressurePing_texture_resource, 0));
-    checkCudaErrors(cudaGraphicsUnmapResources(1, &pressurePong_texture_resource, 0));
-    checkCudaErrors(cudaGraphicsUnmapResources(1, &divergence_texture_resource, 0));
-    checkCudaErrors(cudaGraphicsUnmapResources(1, &obstacles_texture_resource, 0));
-    checkCudaErrors(cudaGraphicsUnmapResources(1, &obstacleSpeeds_texture_resource, 0));
-    checkCudaErrors(cudaGraphicsUnmapResources(1, &velocityPing_texture_resource, 0));
-    checkCudaErrors(cudaGraphicsUnmapResources(1, &velocityPong_texture_resource, 0));//}*/
-
-    //as far as I can tell, without the program this just loads and unloads the active textures wihtout doing anything
-    //Jacobi_no_program(pressurePing, divergence, obstacles, pressurePong);
 }
-/*
-extern "C" addObstaclesWrapper_float(cudaSurfaceObject_t densityPingSurf, cudaTextureObject_t obstaclesTex, dim3 domainSize);
 
-void addObstaclesToDensityTexture(){
-
-    //will try copying to densityPing first (so obstacles don't overwrite irreversibly), and copy back before we need densityPing again
-
-    checkCudaErrors(cudaGraphicsMapResources(1, &densityPong_texture_resource));
-    checkCudaErrors(cudaGraphicsSubResourceGetMappedArray(&densityPongCudaArray, densityPong_texture_resource,0,0));
-
-    checkCudaErrors(cudaCreateSurfaceObject(&, &))
-
-    checkCudaErrors(addObstaclesWrapper_float(densityPongSurf, obstaclesTex, domainSize));
-
-    checkCudaErrors(cudaGraphicsUnmapResources(1, &densityPong_texture_resources, 0));
-}
-*/
 #else
 void ToyCudaWrapper(SurfacePod pressurePing, SurfacePod divergence, SurfacePod obstacles, SurfacePod pressurePong){
 
     printf("mark ToyCudaWrapper");
 
     checkCudaErrors(cudaGraphicsMapResources(1, &pressurePing_texture_resource));
-    //checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**) ));
     checkCudaErrors(cudaGraphicsSubResourceGetMappedArray(&pressurePingCudaArray, pressurePing_texture_resource,0,0));
 
-    //checkCudaErrors(cudaGraphicsMapResources(1, &pressurePong_texture_resource));
-    //checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**) &pressurePongFBOptr, &pressurePongFBOsize, pressurePong_texture_resource));
-    //checkCudaErrors(cudaGraphicsSubResourceGetMappedArray(&pressurePongCudaArray, pressurePong_texture_resource,0,0));
-
     checkCudaErrors(cudaGraphicsMapResources(1, &divergence_texture_resource));
-    //checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**) &divergenceFBOptr, &divergenceFBOsize, divergence_texture_resource));
     checkCudaErrors(cudaGraphicsSubResourceGetMappedArray(&divergenceCudaArray, divergence_texture_resource,0,0));
 
-    //checkCudaErrors(cudaGraphicsMapResources(1, &obstacles_texture_resource));
-    //checkCudaErrors(cudaGraphicsSubResourceGetMappedArray(&obstaclesCudaArray, obstacles_texture_resource,0,0));
-    /*
-  //additions start here
-  pressurePingResDesc.res.array.array = pressurePingCudaArray;
-  //pressurePongResDesc.res.array.array = pressurePongCudaArray;
-  divergenceResDesc.res.array.array = divergenceCudaArray;
-  obstaclesResDesc.res.array.array = obstaclesCudaArray;
-
-  checkCudaErrors(cudaCreateSurfaceObject(&pressurePingSurf,&pressurePingResDesc));
-  checkCudaErrors(cudaCreateTextureObject(&divergenceTex,  &divergenceResDesc, &texDesc,NULL));
-  checkCudaErrors(cudaCreateTextureObject(&obstaclesTex,   &obstaclesResDesc, &texDesc,NULL));
-
-  // Create the surface objects
-
-  //checkCudaErrors(cudaCreateSurfaceObject(&pressurePongSurf, &pressurePongResDesc));
-
-  //and end here
-  */
-
     toyCNN->ForwardPropagation(divergenceCudaArray, pressurePongCudaArray);
-
-    //toyCNN->ForwardPropagationV2(divergenceCudaArray, pressurePingSurf); //this is the version with surfaces (and maybe textures) instead of the target (and maybe source cudaArrays)
 
     checkCudaErrors(cudaGraphicsUnmapResources(1, &pressurePing_texture_resource, 0));
     checkCudaErrors(cudaGraphicsUnmapResources(1, &pressurePong_texture_resource, 0));
@@ -1277,45 +853,21 @@ void Jacobi_CUDA_wrapper(SurfacePod pressurePing, SurfacePod divergence, Surface
     checkCudaErrors(cudaCreateTextureObject(&obstaclesTex,   &obstaclesResDesc, &texDesc,NULL));
 
     // Create the surface objects
+    //surface object creation and binding might only be required once (you don't need it when using cudaCreateSurfaceObject)
 
     checkCudaErrors(cudaCreateSurfaceObject(&pressurePongSurf, &pressurePongResDesc));
 
-    //surface object creation and binding might only be required once (you don't need it when using cudaCreateSurfaceObject)
-
     //checkCudaErrors(cudaBindSurfaceToArray(&pressurePongSurf, pressurePongCudaArray, &pressurePingFormat));
 
-    //do the CUDA implementation of the Jacobi
-    //try without sending the d_buffer first
+    //do the CUDA implementation of the Jacobi projection method
     float alpha = -CellSize * CellSize;
 
     Jacobi_CUDA(pressurePingSurf, pressurePongSurf, divergenceTex, obstaclesTex, pressurePingDims, alpha, inverseBeta, NumJacobiIterations, currentLoop); //they all have the same size
-
-    //you may need to free the texture objects or something
-
-    //checkCudaErrors(cudaDeviceSynchronize());
-    //checkCudaErrors(cudaGetLastError());
-
-    //printf("\n\n\n\n");
 
     checkCudaErrors(cudaGraphicsUnmapResources(1, &pressurePing_texture_resource, 0));
     checkCudaErrors(cudaGraphicsUnmapResources(1, &pressurePong_texture_resource, 0));
     checkCudaErrors(cudaGraphicsUnmapResources(1, &divergence_texture_resource, 0));
     checkCudaErrors(cudaGraphicsUnmapResources(1, &obstacles_texture_resource, 0));
-
-    //still need to call this to draw the stuff and swap the framebuffer
-    //the glUseProgram is commented out
-
-    //everything except the call to ResetState() is commented out
-    //Jacobi_no_program(pressurePing, divergence, obstacles, pressurePong);
-
-    /*
- * struct SurfacePod {
-    GLuint FboHandle;
-    GLuint ColorTexture;
-    GLsizei Width;
-    GLsizei Height;
-    GLsizei Depth;
-};*/
 }
 
 void SwapCudaArrays(cudaArray* &swap1, cudaArray* &swap2){
@@ -1344,12 +896,8 @@ void PezUpdate(float seconds)
     pezCheck(OpenGLError);
     PezConfig cfg = PezGetConfig();
 
-    //seconds = 0.0001;
-
-    //float dt = seconds * 0.0001f;
     static auto lastTime = std::chrono::steady_clock::now();
     static auto beginning = lastTime;
-    //auto currentTime = lastTime;
     static int currentLoop = 0;
     static float dt = 0.025f;
     static float ct = 0;
@@ -1367,29 +915,8 @@ void PezUpdate(float seconds)
                 1.0f);  // Far Plane
     Matrices.ModelviewProjection = Matrices.Projection * Matrices.Modelview;
 
-    //printf("\n\ndet(Matrices.View) = %f\n\n", determinant(Matrices.View));
-    //printf("\n\ndet(Matrices.Projection) = %f\n\n", determinant(Matrices.Projection));
-
-    //XYImpulse position is a Vector4 with z=0 and w=1 always, x and y are changed with LCtrl + mouse move
-    //if(determinant(Matrices.ModelviewProjection) != 0.0f)
-    //Matrix4 aMatrix = inverse(Matrices.ModelviewProjection);
-
-    /*printf("\n");
-  for(int i=0;i<4;i++){
-      for(int j=0;j<4;j++)
-          printf("Matrices.ModelviewProjection[%d,%d] = %f;  ", i,j,Matrices.ModelviewProjection.getElem(i,j));
-      printf("\n");}
-  printf("\n");
-
-  for(int k=0;k<4;k++)
-      printf("XYImpulsePosition[%d] = %f;  ", k,XYImpulsePosition[k]);
-  */
-
-    //printf("\n\nImpulsePosition4.getX() = %f, ImpulsePosition4.getY() = %f, ImpulsePosition4.getZ() = %f, ImpulsePosition4.getW() = %f\n\n", ImpulsePosition4.getX(), ImpulsePosition4.getY(), ImpulsePosition4.getZ(), ImpulsePosition4.getW());
-    //printf("\n\nImpulsePosition4.getX() = %f, ImpulsePosition4.getY() = %f, ImpulsePosition4.getZ() = %f, ImpulsePosition4.getW() = %f\n\n", ImpulsePosition4.getX(), ImpulsePosition4.getY(), ImpulsePosition4.getZ(), ImpulsePosition4.getW());
     ImpulsePosition += (inverse(Matrices.ModelviewProjection) * (XYImpulsePosition-XYImpulsePositionLast)).getXYZ();
     XYImpulsePositionLast = XYImpulsePosition;
-    //XYImpulsePosition = Vector4(0,0,0,0);
 
     auto currentTime = std::chrono::steady_clock::now();
     if(dt == -1.0f)
@@ -1405,25 +932,14 @@ void PezUpdate(float seconds)
         TimeStep = dt;
     }
 
-    //if(numLoop == 1)
-    //    TimeStep = dt*1000.0f;
-    //else
-    //    TimeStep = dt*4.0f;
-    //TimeStep = dt*1000;
-
 #if USE_CNN_CUDA_ADVECTION == 0
 
     if (SimulateFluid) {
         glBindVertexArray(Vaos.FullscreenQuad);
         glViewport(0, 0, GridWidth, GridHeight);
 
-        //if(useStaggered)
-        //    AdvectVelocity(Slabs.Velocity.Ping, Slabs.Velocity.Ping, Surfaces.Obstacles, Slabs.Velocity.Pong, VelocityDissipation);
-        //else
-            Advect(Slabs.Velocity.Ping, Slabs.Velocity.Ping, Surfaces.Obstacles, Surfaces.ObstacleSpeeds, Slabs.Velocity.Pong, VelocityDissipation);
-
-        //printf("no - %d\n",int(glGetError()));
-
+        //start advection steps
+        Advect(Slabs.Velocity.Ping, Slabs.Velocity.Ping, Surfaces.Obstacles, Surfaces.ObstacleSpeeds, Slabs.Velocity.Pong, VelocityDissipation);
         Advect(Slabs.Velocity.Ping, Slabs.Temperature.Ping, Surfaces.Obstacles, Surfaces.ObstacleSpeeds, Slabs.Temperature.Pong, TemperatureDissipation);
         SwapSurfaces(&Slabs.Temperature);
         Advect(Slabs.Velocity.Ping, Slabs.Density.Ping, Surfaces.Obstacles, Surfaces.ObstacleSpeeds, Slabs.Density.Pong, DensityDissipation);
@@ -1431,55 +947,31 @@ void PezUpdate(float seconds)
         SwapSurfaces(&Slabs.Velocity);
         ApplyBuoyancy(Slabs.Velocity.Ping, Slabs.Temperature.Ping, Slabs.Density.Ping, Slabs.Velocity.Pong);
         SwapSurfaces(&Slabs.Velocity);
+
         //if we apply this function, we won't need to flip the velocity use (Ping or Pong) in CNNProjectionCudaWrapper, because SwapSurfaces is called four times on velocity
         //might make more sense to move this after impulse application
-        //if(numLoop>=1){
         ApplyVorticityConfinement(Slabs.Velocity.Ping, Slabs.Velocity.Pong);
         SwapSurfaces(&Slabs.Velocity);//}
 
         //velocityPing is new now
-        //if(!useStaggered)
-        //  ApplyImpulse(Slabs.Velocity.Ping, ImpulsePosition, ImpulseTemperature); //don't need to swap after this
         ApplyImpulse(Slabs.Temperature.Ping, Surfaces.Obstacles, ImpulsePosition, ImpulseTemperature, JitterTemperature, ct);
         ApplyImpulse(Slabs.Density.Ping, Surfaces.Obstacles, ImpulsePosition, ImpulseDensity, JitterDensity, ct);
 
         //update obstacles here
-        //if(numLoop == 0)
-            UpdateObstacles(Surfaces.Obstacles, ((std::chrono::duration<float>)(currentTime - beginning)).count()); //the speed is just a multiplier
+        UpdateObstacles(Surfaces.Obstacles, ((std::chrono::duration<float>)(currentTime - beginning)).count()); //the speed is just a multiplier
         UpdateObstacleSpeeds(Surfaces.ObstacleSpeeds, Surfaces.Obstacles, ((std::chrono::duration<float>)(currentTime - beginning)).count());
         //obstacles will change how the divergence calculation works
 
         ApplyObstacleSpeeds(Slabs.Velocity.Ping, Surfaces.Obstacles, Surfaces.ObstacleSpeeds, Slabs.Velocity.Pong); //->this seems to destroy everything
         SwapSurfaces(&Slabs.Velocity);
 
-        //CopyVelocity(Slabs.Velocity.Ping, Slabs.Velocity.Pong); //remove this and apply ping-ponging in CNNProjectionCudaWrapper if things start working
-        //SwapSurfaces(&Slabs.Velocity);
-
-        //probably need to change this
-//#if USE_CNN == 0
-
-//#endif
-        //DON'T USE THIS
-        //ComputeDivergenceCNN(Slabs.Velocity.Ping, Surfaces.Obstacles, Surfaces.Divergence); //this just needs halfinversewhatever to have the correct value
-        //SwapSurfaces(&Slabs.Velocity);
-        //ClearSurface(Slabs.Pressure.Ping, 0);
-
+        //start projection step, either Jacobi or CNN-based
         if(useJacobi){
             ComputeDivergence(Slabs.Velocity.Ping, Surfaces.Obstacles, Surfaces.Divergence); //might be useful in the CNN version to avoid nans
-            //ClearSurface(Slabs.Pressure.Ping, 0);
             for (int i = 0; i < NumJacobiIterations; ++i) {
                 Jacobi(Slabs.Pressure.Ping, Surfaces.Divergence, Surfaces.Obstacles, Slabs.Pressure.Pong);
                 SwapSurfaces(&Slabs.Pressure);
             }
-
-            //if(k%2)
-            //Jacobi_CUDA_wrapper(Slabs.Pressure.Pong, Surfaces.Divergence, Surfaces.Obstacles, Slabs.Pressure.Ping);
-            //else
-            //Jacobi_CUDA_wrapper(Slabs.Pressure.Ping, Surfaces.Divergence, Surfaces.Obstacles, Slabs.Pressure.Pong, currentLoop);
-            //JacobiProgramLoop();
-            //k++;
-
-            //SwapCudaArrays(pressurePingCudaArray, pressurePongCudaArray);
             SubtractGradient(Slabs.Velocity.Ping, Slabs.Pressure.Ping, Surfaces.Obstacles, Surfaces.ObstacleSpeeds, Slabs.Velocity.Pong);
             SwapSurfaces(&Slabs.Velocity);
         }
@@ -1490,9 +982,6 @@ void PezUpdate(float seconds)
 #else
             //velocityPing is still the new one here
             CNNProjectionCudaWrapper(Slabs.Pressure.Ping, Surfaces.Divergence, Surfaces.Obstacles, Slabs.Pressure.Pong, Slabs.Velocity.Ping, Slabs.Velocity.Pong);
-            //addObstaclesToDensityTexture(Surfaces.Obstacles, Slabs.Density.Pong); //add obstacle voxels to density texture, which will be removed at the very beginning of the next loop
-            //SwapSurfaces(&Slabs.Pressure);
-            //SubtractGradient(Slabs.Velocity.Ping, Slabs.Pressure.Ping, Surfaces.Obstacles, Slabs.Velocity.Pong);//, defaultNet->velSTD);
 #endif
         }
 
@@ -1500,46 +989,17 @@ void PezUpdate(float seconds)
         SwapSurfaces(&Slabs.Velocity);
         CopyVelocity(Slabs.Velocity.Ping, Slabs.Velocity.Pong); //remove this and apply ping-ponging in CNNProjectionCudaWrapper if things start working
         SwapSurfaces(&Slabs.Velocity);
-        //SwapSurfaces(&Slabs.Velocity);
-        //SimulateFluid = !SimulateFluid;
         currentLoop++;
     }
 #else
     CudaSimulationLoop(); //needs current loop?
 #endif
 
-    //k = k%2;
-
-
-    //infoMsg("%d\n",int(glGetError()));
-    auto someError = glGetError();
-    //printf("gluErrorString(glGetError()) = %s (%d)\n", gluErrorString(someError), someError);
-    pezCheck(CheckOpenGLError(someError)); //<---ERROR HERE
-
+    pezCheck(CheckOpenGLError(glGetError()));
     dt = -1.0f;
-
-    //SwapSurfaces(&Slabs.Velocity);
-
     numLoop++;
 }
-/*
-void PezHandleMouse(int x, int y, int action)
-{
-  static bool MouseDown = false;
-  static int StartX, StartY;
-  static const float Speed = 0.005f;
-  if (action == PEZ_DOWN) {
-      StartX = x;
-      StartY = y;
-      MouseDown = true;
-    } else if (MouseDown && action == PEZ_MOVE) {
-      ThetaX = DefaultThetaX + Speed * (x - StartX);
-      ThetaY = DefaultThetaY + Speed * (y - StartY);
-    } else if (action == PEZ_UP) {
-      MouseDown = false;
-    }
-}
-*/
+
 void PezHandleMouse(int x, int y, int action, bool controlDown)
 {
     static bool MouseDown = false;
@@ -1559,18 +1019,10 @@ void PezHandleMouse(int x, int y, int action, bool controlDown)
     if(controlDown){
 
         if (action == PEZ_MOVE) {
-            //printf("x = %d; StartXCtrl = ; y = ; StartYCtrl = \n");
-            XYImpulsePosition.setX(XYImpulsePosition.getX() + (x - StartXCtrl) * Speed);// * 1.0 / PezGetConfig().Width);//1.0 / PezGetConfig().Width * (StartXCtrl - x));
-            XYImpulsePosition.setY(XYImpulsePosition.getY() - (y - StartYCtrl) * Speed);// * 1.0/ PezGetConfig().Height);//1.0 / PezGetConfig().Height * (StartYCtrl - y));
+            XYImpulsePosition.setX(XYImpulsePosition.getX() + (x - StartXCtrl) * Speed);
+            XYImpulsePosition.setY(XYImpulsePosition.getY() - (y - StartYCtrl) * Speed);
             StartXCtrl = x;
             StartYCtrl = y;
-
-            //StartXCtrl = XYImpulsePosition.getX() * PezGetConfig().Width - x;
-            //StartYCtrl = XYImpulsePosition.getY() * PezGetConfig().Height - y;
-            //StartYCtrl = x;
-            //StartXCtrl = y;
-            //StartXCtrl = Speed * (x - StartXCtrl);
-            //StartYCtrl = Speed * (y - StartYCtrl);
         }
         //convert to 3D coordinates based on camera position
     }
@@ -1585,11 +1037,7 @@ void PezHandleMouse(int x, int y, int action, bool controlDown)
         } else if (action == PEZ_UP) {
             MouseDown = false;
         }
-        //(Matrices.ModelviewProjection);
     }
-
-    //StartXCtrl = x;
-    //StartYCtrl = y;
 
     controlWasDown = controlDown;
 }

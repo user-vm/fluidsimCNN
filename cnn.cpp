@@ -5,59 +5,91 @@
 
 #include "cnn.h"
 #include <sstream>
-//#include <pez.h>
 #include <stdio.h>
 #include <cuda_runtime_api.h>
 #include <chrono>
-#include <thread> //#include <fstream>
+#include <thread>
 #include <algorithm>
 #include <sstream>
 #include <iterator>
 #include <cctype>
-//#include <thpp/Tensor.h>
 
 #include "defines.h"
 
-//might want to add
-
+///
+/// \brief doPrintfWrapper - print single element of 3D CUDA texture, at index (i,j,k)
+/// \param someTex - the CUDA texture
+/// \param i
+/// \param j
+/// \param k
+///
 extern "C" cudaError_t
 doPrintfWrapper(cudaTextureObject_t someTex, int i, int j, int k);
 
 extern "C" cudaError_t
 printfDebugWrapper();
 
-//someFactor is a lazy way to allow for printing the input, which has three channels instead of one
-//printStride means only the elements with z % printStride.z == 0, y % printStride.y == 0, and x % printStride.x == 0 are printed
+///
+/// \brief printfArrayWrapper
+/// \param theArray
+/// \param theArraySize
+/// \param someFactor - is a lazy way to allow for printing the input, which has three channels instead of one
+/// \param printStride - only the elements with z % printStride.z == 0, y % printStride.y == 0, and x % printStride.x == 0 are printed
+/// \param printZeros - if false, print only nonzero elements in the array
+///
 extern "C" cudaError_t
 printfArrayWrapper(float* theArray, dim3 theArraySize, int someFactor, dim3 printStride, bool printZeros);
 
+///
+/// \brief printElementWrapper
+/// \param normalArray
+/// \param extent
+///
 extern "C" cudaError_t
 printElementWrapper(float* normalArray, cudaExtent extent);
 
+///
+/// \brief printDataCudaArrayContentsWrapper
+/// \param data
+///
 extern "C" cudaError_t
 printDataCudaArrayContentsWrapper(cudaArray* data);
 
+///
+/// \brief printDataCudaArrayContents3DWrapper
+/// \param data
+///
 extern "C" cudaError_t
 printDataCudaArrayContents3DWrapper(cudaArray* data);
 
+///
+/// \brief copyCudaArrayToDeviceArrayWrapper_float
+/// \param src
+/// \param dst
+/// \param msg
+///
 extern "C" cudaError_t
 copyCudaArrayToDeviceArrayWrapper_float(cudaArray* src, float* dst, int msg);
 
+///
+/// \brief copyCudaArrayToDeviceArrayWrapper_double
+/// \param src
+/// \param dst
+///
 extern "C" cudaError_t
 copyCudaArrayToDeviceArrayWrapper_double(cudaArray* src, double* dst);
 
+///
+/// \brief copyCudaArrayToDeviceArrayWrapper_half
+/// \param src
+/// \param dst
+///
 extern "C" cudaError_t
 copyCudaArrayToDeviceArrayWrapper_half(cudaArray* src, void* dst);
-/*
-namespace std
-{
-  template<>
-  struct default_delete<InputLayer3D> {
-    void operator()(InputLayer3D* ptr) {}
-  };
-}
-*/
 
+///
+/// \brief Layer<T>::setStride
+///
 template<typename T>
 void Layer<T>::setStride(){
 
@@ -85,6 +117,7 @@ void Layer<T>::concatenateTensorWith(Layer<T>* otherLayer){
     (*concatWithPointer).push_back(otherLayer);
 }
 
+/// dictionary for different types of CUDNN convolution activations (maps std::string to cudnnActivationMode_t)
 template<typename T>
 std::unordered_map<std::string, cudnnActivationMode_t> ConvBiasLayer3D<T>::activationModeMap = {{"sigmoid",     CUDNN_ACTIVATION_SIGMOID     },
                                                                                                 {"relu",        CUDNN_ACTIVATION_RELU        },
@@ -93,11 +126,17 @@ std::unordered_map<std::string, cudnnActivationMode_t> ConvBiasLayer3D<T>::activ
                                                                                                 {"elu",         CUDNN_ACTIVATION_ELU         },
                                                                                                 {"identity",    CUDNN_ACTIVATION_IDENTITY    }};
 
+///
+/// \brief PoolingLayer3D<T>::PoolingLayer3D - do not use, only
+/// \param _dims
+///
 template<typename T>
 PoolingLayer3D<T>::PoolingLayer3D(int _dims[3]){
 
     for(int i=0;i<3;i++)
         dims[i] = _dims[i];
+
+    //TODO (or implement pooling layers other than AvgPoolLayer)
 }
 
 template<typename T>
@@ -109,10 +148,17 @@ MergeContinguousTensorsLayer3D<T>::MergeContinguousTensorsLayer3D(){}
 template<typename T>
 MergeContinguousTensorsLayer3D<T>::~MergeContinguousTensorsLayer3D(){}
 
+///
+/// \brief MergeContinguousTensorsLayer3D<T>::forward - no-op for this layer type (don't need to do anything, output is the same as input, and input is already set)
+///
 template<typename T>
-void MergeContinguousTensorsLayer3D<T>::forward(){} //don't need to do anything, output is the same as input, and input is already set
+void MergeContinguousTensorsLayer3D<T>::forward(){}
 
 template<typename T>
+///
+/// \brief AvgPoolLayer3D<T>::AvgPoolLayer3D - average pooling layer
+/// \param _dims - pooling kernel size
+///
 AvgPoolLayer3D<T>::AvgPoolLayer3D(int _dims[3]){
 
     for(int i=0;i<3;i++)
@@ -132,15 +178,10 @@ AvgPoolLayer3D<T>::AvgPoolLayer3D(int _dims[3]){
                                            stride));
 }
 
-/*
-template<typename T>
-Layer<T>::Layer(Layer<T>* inputLayer, std::vector<Layer<T>*> outputLayers, std::string _name){
-  connectedInputLayer  = inputLayer;
-  connectedOutputLayers = outputLayers;
-  name = _name;
-}
-*/
-
+///
+/// \brief Layer<T>::allocateTensor - allocate tensor memory, needs to be done before
+/// \param tensorData
+///
 template<typename T>
 void Layer<T>::allocateTensor(T* tensorData){
 
@@ -155,7 +196,7 @@ void Layer<T>::allocateTensor(T* tensorData){
     if(tensorData!=NULL){
         data = tensorData;
         this->getTotalTensorSize();
-        printf("GETTOTALTENSORSIZE %d", this->getTotalTensorSize());}
+        infoMsg("GETTOTALTENSORSIZE %d", this->getTotalTensorSize());}
     else if(this->concatWithPointer == NULL || this->concatWithPointer->size() <= 1){
         infoMsg("getTotalTensorSize = %d\n", getTotalTensorSize());
         checkCudaErrors(cudaMalloc((void**)&data, sizeof(T)*getTotalTensorSize()));
@@ -163,12 +204,10 @@ void Layer<T>::allocateTensor(T* tensorData){
     else
         this->getTotalTensorSize(); //probably useless, unless the merging layer looks at the number of channels before calling this
 
-    //printf("Allocated for %s sizeof(T) * %d bytes\n", this->name.c_str(), getTotalTensorSize());
-
     if(getTotalTensorSize() == 0)
         warnMsg("WARNING: Tensor has no elements; allocated memory is zero.");
 
-    //this is poorly implemented, only exists for ConvLayer3D and ConvBiasLayer3D to determine the forward convolution algorithm
+    //TODO: this is poorly implemented, only exists for ConvLayer3D and ConvBiasLayer3D to determine the forward convolution algorithm
     //if variable input size is implemented, this will go into ConvBiasLayer3D<T>::forward()
     postPrep();
 
@@ -182,44 +221,9 @@ cudnnActivationMode_t ConvBiasLayer3D<T>::getActivationMode(){
 template<typename T>
 void ConvBiasLayer3D<T>::postPrep(){
 
-    //need cudnnGetConvolutionFowrwardAlgorithm here
-
-    //algorithm for cudnnConvolutionFwdAlgo_t algo can be suggested by CUDA by using cudnnGetConvolutionForwardAlgorithm
-    //use CUDNN_CONVOLUTION_FWD_PREFER_FASTEST for now with the cudnnConvolutionFwdPreference_t enum
-    //CUDNN_CONVOLUTION_FWD_SPECIFY_WORKSPACE_LIMIT is for overhead, does not contain
-    //see "Choosing Convolution Algo in cuDNN v2" in favorites
-
-    //could get expected performance results witgh cudnnGetConvolutionForwardAlgorithm_v7
-
     size_t sizeInBytes;
-    /*
-  cudnnGetConvolutionForwardWorkspaceSize(
-                                  *(this->getLayerCudnnHandle()),
-                                  this->connectedInputLayer->tensorDesc,
-                                  this->filterDesc,
-                                  this->convDesc,
-                                  this->tensorDesc,
-                                  CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM,
-                                  &sizeInBytes );
-*/
-    //printf("\n\nsizeInBytes for %s is %d\n\n", this->name.c_str(), sizeInBytes);
 
-    /*
-  if(getActivationMode() == CUDNN_ACTIVATION_RELU)
-    checkCUDNN(cudnnGetConvolutionForwardAlgorithm(*(this->getLayerCudnnHandle()),
-                                                   this->connectedInputLayer->tensorDesc,
-                                                   this->filterDesc,
-                                                   this->convDesc,
-                                                   this->tensorDesc,
-                                                   CUDNN_CONVOLUTION_FWD_NO_WORKSPACE,//CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,
-                                                   0, //this is the memory limit, which is ignored with CUDNN_CONVOLUTION_FWD_PREFER_FASTEST
-                                                   &algorithm));
-  else if(getActivationMode() == CUDNN_ACTIVATION_IDENTITY)*/
     algorithm = CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM;
-    /*  else
-    errorMsg("Cannot do convolution with activation other than relu or identity");*/
-
-    //CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM
 
     checkCUDNN(cudnnCreateTensorDescriptor(&uselessDesc));
     checkCUDNN(cudnnSetTensorNdDescriptor(uselessDesc, this->getDataType(), this->tensorDims.size(), this->tensorDims.data(), this->tensorStrides.data())); //since it is multiplied by zero, it doesn't matter what we put in it
@@ -242,11 +246,6 @@ void UpscaleLayer3D<T>::calculateTensorDims(){
 
     infoMsg("\nUpscaleLayer\n");
 
-    //printf("\nUpscaleLayer %s, tensorDims = %d %d %d %d %d", this->name.c_str(), this->tensorDims[0], this->tensorDims[1], this->tensorDims[2], this->tensorDims[3], this->tensorDims[4]);
-    /*
-  for(i=0;i<tensorDims.size();i++)
-      printf("tensorDims[%d] = ");
-*/
     this->getTotalTensorSize();
 
     this->setStride();
@@ -258,17 +257,7 @@ void ConvBiasLayer3D<T>::calculateTensorDims(){
     this->tensorDims.resize(this->connectedInputLayer->tensorDims.size());
 
     int theDims[5];
-    //cudnnSetCallback(CUDNN_SEV_INFO_EN,NULL,NULL);
-
-    //printf("calculateTensorDims %s\n",this->name.c_str());
-
-    //tensorDims.data() is 0,0,0,0,0 for some reason
-    //the second parameter of this should be the descriptor of the input tensor
-    checkCUDNN(cudnnGetConvolutionNdForwardOutputDim(convDesc, this->connectedInputLayer->tensorDesc, filterDesc, 5, this->tensorDims.data())); //3 or 5? 5, since it is the dimension of the output tensor
-    /*
-  for(int i=0;i<this->tensorDims.size();i++)
-    this->tensorDims[i] = theDims[i];
-*/
+    checkCUDNN(cudnnGetConvolutionNdForwardOutputDim(convDesc, this->connectedInputLayer->tensorDesc, filterDesc, 5, this->tensorDims.data()));
     this->getTotalTensorSize();
 
     this->setStride();
@@ -317,8 +306,7 @@ void MergeContinguousTensorsLayer3D<T>::calculateTensorDims(){
 
     //checking that spatial dimensions are identical is done when is concatenateWith is called
     for(int i=0;i<this->connectedInputLayer->concatWithPointer->size();i++){
-        //(*(this->connectedInputLayer->concatWithPointer))[i]->calculateTensorDims();
-        totalChannels += (*(this->connectedInputLayer->concatWithPointer))[i]->tensorDims[1]; //the C in NCDHW
+        totalChannels += (*(this->connectedInputLayer->concatWithPointer))[i]->tensorDims[1];
     }
 
     this->tensorDims[1] = totalChannels;
@@ -343,11 +331,6 @@ void MergeContinguousTensorsLayer3D<T>::postPrep(){
 
     //this might cause a segmentation fault at the end, if the dat is deallocated twice (probably not)
 }
-
-/*
-template<typename T>
-void Input
-*/
 
 template<typename T>
 size_t Layer<T>::getTotalTensorSize(){
@@ -413,26 +396,11 @@ Layer<T>* Net<T>::addLayer(std::unique_ptr<Layer<T>> layerToConnect, Layer<T>* l
         inputLayer->connectedInputLayer = NULL;
         outputLayer = inputLayer.get();
     }
-    else{  //if (GetKernelIndices(flags, chan, k, j, i)) { //???
-        // return;
-        //}
-        //layerToConnect->connectedInputLayer = layerToConnectTo;
+    else{
         layerToConnectTo->connectedOutputLayers.push_back(std::move(layerToConnect)); //this switches the ownership of the object to connectedOutputLayers.back()
         layerToConnectTo->connectedOutputLayers.back()->connectedInputLayer = layerToConnectTo;
         outputLayer = layerToConnectTo->connectedOutputLayers.back().get();
-        //layerToConnectTo->connectedOutputLayers.back().get();
         layerToConnectTo->connectedOutputLayers.back()->layerCudnnHandle = &cudnnHandle;}
-    //layerToConnect->connectedInputLayer = layerToConnectTo;}
-
-
-    //layerToConnectTo->connectedOutputLayers.push_back(std::move(layerToConnect)); //this switches the ownership of the object to connectedOutputLayers.back()
-
-    //layerToConnect->connectedInputLayer = layerToConnectTo;
-
-    //outputLayer = layerToConnect.get();
-    //layerToConnect->layerCudnnHandle = &cudnnHandle;
-
-    //layerToConnect->getTensorSize(); //for InputLayer3D, error if loadData or whatever it was has not been called yet; for everything except pooling, upscaling and convolution, should return the same size as the tensor data in layerToConnectTo
 
     return outputLayer; //this probably nulls the outputLayer unique pointer, so you should probably return outputLayer.get()
 }

@@ -33,33 +33,18 @@ class Layer //this will be the base class for all tensors in the network
 {
 public:
   std::vector<std::unique_ptr<Layer<T>>> connectedOutputLayers;
-  //std::vector<std::shared_ptr<Layer<T>>> connectedOutputLayersShared;
-  //std::vector<std::shared_ptr<Layer<T>>> connectedOutputLayers;
-  //std::vector<Layer<T>*> connectedOutputLayers;
   std::vector<Layer<T>*> connectedOutputLayersRaw;
-  Layer<T>* connectedInputLayer; //multiple input layers don't really make sense
-  //there should be only one input layer
-  //Layer<T>* connectedInputLayer;
-
-  //this should no longer be needed due to the templates
-  //what it is can be deduced from sizeof(T)
-  //cudnnDataType_t dataType; //this should be the same throughout the Net
+  Layer<T>* connectedInputLayer; //there should be only one input layer
 
   std::string name;
 
-  //either put in a virtual getDimensions function or put the tensor dimensions in here
-  //this might not truly be needed, since it could be retrieved with a cudnnGetTensorDescriptor
   std::vector<int> tensorDims;
   std::vector<int> tensorStrides;
 
-  //Layer(Layer<T> *inputLayer, std::vector<Layer<T>*> outputLayers, std::string _name);
   Layer();
   ~Layer();
-  //destroy();
 
   virtual void forward(){printf("Virtual forward method called.\n");}
-
-  //void forward(Net<T> net);
 
   cudnnTensorDescriptor_t tensorDesc;
   //void *data;
@@ -92,8 +77,6 @@ public:
   void concatenateTensorWith(Layer<T> *otherLayer);
 
   virtual std::string type(){return this->layerType;}
-
-  //virtual std::string type = "Layer";
 
   std::vector<Layer<T>*>* concatWithPointer = NULL;
 
@@ -145,37 +128,23 @@ private:
     std::string layerType = "MergeContinguousLayer3D";
 };
 
-//NEED TO SEE ABOUT cudnnDataType_t
-
-//T needs to be float, double, or half (if supported); any other types will bring forth armageddon
-//only float will truly be checked
+///
+/// \brief The class containing the neural network
+///
 template<typename T>
-class Net //the class containing the actual net
+class Net
 {
 public:
-  //std::vector<Layer> layers;
-
-  //these two might have problems with the uncudnnDataType_t dataType;ique pointer thing
   Layer<T>* outputLayer; //last layer, that gives the end result
   std::unique_ptr<Layer<T>> inputLayer; //first layer, that takes the initial data
 
   Net();
 
-  //virtual void makeNet();
-  //virtual void forward();
-  //Layer<T>* addLayer(std::unique_ptr<InputLayer3D<T>> &layerToConnect);
   Layer<T>* addLayer(std::unique_ptr<Layer<T>> layerToConnect);
   Layer<T>* addLayer(std::unique_ptr<Layer<T>> layerToConnect, Layer<T> *layerToConnectTo);
-  //Layer<T>* addLayerShared(std::shared_ptr<Layer<T>> layerToConnect, Layer<T>* layerToConnectTo);
-  //Layer<T>* addLayerShared(std::shared_ptr<Layer<T>> layerToConnect);
-  //Layer<T>* addLayerRaw(Layer<T>* layerToConnect, Layer<T>* layerToConnectTo);
-  //Layer<T>* addLayerRaw(Layer<T>* layerToConnect);
 
   //this is mainly for the convbiaslayer
   Layer<T>* addLayer(Net<T>* netToConnect, Layer<T> *layerToConnectTo); //-> no longer useful
-
-  //Layer<T>* addLayer(<Layer<T>* layerToConnect);
-  //Layer<T>* addLayer(Layer<T>* layerToConnect, Layer<T>* layerToCennectTo);
 
   cudnnDataType_t getDataType();
   cudnnHandle_t getCudnnHandle();
@@ -185,7 +154,6 @@ public:
   void setDataType();
 
   void allocateTensors(T* allocateInput = NULL, T* allocateOutput = NULL);
-  //void allocateTensorsRaw();
 
 private:
   cudnnHandle_t cudnnHandle;
@@ -195,14 +163,7 @@ private:
 template<typename T>
 class DefaultNet: public Net<T>{
 public:
-  //DefaultNet(std::vector<std::vector<int> > allTensorDims);
-  //DefaultNet(std::string fileName);
   DefaultNet(std::string fileName, bool isBinary, int inputSize[] = NULL, int numBanks = 1, int bankLength = 2);
-  //DefaultNet(); //don't know the defaults yet
-
-  //~DefaultNet();
-
-  //void forwardShared();
 
   void makeNet(int inputDims[] = NULL, int numBanks = 1, int bankLength = 2);
 
@@ -235,9 +196,7 @@ public:
   size_t inputLayerObstacleOffset;
   size_t inputLayerObstacleBufferSize;
 
-  //T getNorm;
-
-  //forward prop of entire network
+  //forward pass of entire network
   void forward(bool doSubtractGradient = false, bool doComputeGradient = false, T dt = 0.25f);
 
   void getOutput(cudaArray* pressureOut);
@@ -253,10 +212,6 @@ public:
 
   T *obstacles, *velocity, *divergence, *pressure;
 
-/*
-private:
-  void *(copyCudaArrayToDeviceArrayWrapper)(); //should this be here or in Net()?
-*/
   cudaError_t updateObstaclesDNWrapper(dim3 obstacleExtent);
   cudaError_t setWallsWrapper(T *obstacles, dim3 domainExtent, size_t thickness);
   cudaError_t copyCudaArrayToDeviceArrayZeroObstacles(cudaArray *lastPressureArray, cudaArray *velDivergenceArray, cudaArray *obstacleArray, size_t inputLayerObstacleOffset, size_t inputLayerVelDivergenceOffset);
@@ -271,8 +226,6 @@ template<typename T>
 class PoolingLayer3D : public Layer<T>{
 public:
   int dims[3];
-  //int inputDims[5];
-  //int inputNStrides[5];
 
   T alpha = 1.0f;
   T beta = 0.0f;
@@ -300,25 +253,23 @@ public:
 
   AvgPoolLayer3D(int _dims[3]);
 
-  //this would just call PoolingLayer3D::forward
-  //void forward();
-
   virtual std::string type(){return this->layerType;}
 
 private:
   std::string layerType = "AvgPoolingLayer3D";
 };
 
+///
+/// \brief Layer for adding two 3D tensors or the same size
+///
 template<typename T>
 class AddLayer3D : public Layer<T>{
 public:
-  Layer<T>* otherInputLayer; //adds this input's tensor to the inputLayer in the Layer parent class
+  Layer<T>* otherInputLayer; //the tensor to add to inputLayer (see Layer parent class)
   void forward();
 
-  //determine the weights of each
   float alpha, beta;
   cudnnTensorDescriptor_t tensorDesc;
-  //T* convData; //this just contains one in the centre, and zeroes for the rest of the elements (so that )
   cudnnConvolutionDescriptor_t convDesc;
 
   AddLayer3D(Layer<T>* otherInputLayer);

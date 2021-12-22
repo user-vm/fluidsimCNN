@@ -4,13 +4,6 @@
 #include <cuda_runtime_api.h>
 #include <helper_cuda.h>
 #include "defines.h"
-/*
-template<typename T>
-__global__ void addObstacles(cudaSurfaceObject_t densityPongSurf, cudaSurfaceOb){
-
-
-}
-*/
 
 template<typename T>
 __global__ void getStandardDeviationFlat(T* tensor, size_t tensorSize, T* sum){
@@ -52,7 +45,14 @@ extern "C" cudaError_t setEdgesWrapper_float(float* buffer, dim3 domainExtent, f
 }
 
 #define inRange(array,index,length) (length>=index)?(array[index]):(-1)
-//should probably always run with <<<1,1>>>
+
+///
+/// \brief printSingleElement_float - print float element at indices (run with <<<1,1>>>)
+/// \param theDeviceArray
+/// \param numSizes
+/// \param sizes
+/// \param elementToGet
+///
 __global__ void printSingleElement_float(float* theDeviceArray, size_t numSizes, int* sizes, int* elementToGet){
 
   int offset = elementToGet[0];
@@ -73,30 +73,27 @@ __global__ void printSingleElement_float(float* theDeviceArray, size_t numSizes,
 extern "C" cudaError_t printSingleElementWrapper_float(float* theDeviceArray, size_t numSizes, int* sizes, int* elementToGet){
 
   printSingleElement_float<<<1,1>>>(theDeviceArray, numSizes, sizes, elementToGet);
-  //checkCudaErrors(cudaDeviceSynchronize());
-
   return cudaPeekAtLastError();
 }
 
+///
+/// \brief setDeviceArrayConstant_float - set elements of 1D array to float constant "value"(run as 1D kernel)
+/// \param theDeviceArray
+/// \param totalDeviceArraySize
+/// \param value
+///
 __global__ void setDeviceArrayConstant_float(float* theDeviceArray, unsigned int totalDeviceArraySize, float value){
-
-    //printf("index = %d; totalDeviceArraySize = %d; value = %f\n", threadIdx.x + (blockIdx.x * blockDim.x), totalDeviceArraySize, value);
 
   if(threadIdx.x + (blockIdx.x * blockDim.x) >= totalDeviceArraySize)
     return;
 
   theDeviceArray[threadIdx.x + (blockIdx.x * blockDim.x)] = value;
-  //printf("index = %d; totalDeviceArraySize = %d; value = %f\n", threadIdx.x + (blockIdx.x * blockDim.x), totalDeviceArraySize, value);
-
-  //__syncthreads();
 }
 
 extern "C" cudaError_t setDeviceArrayConstantWrapper_float(float* theDeviceArray, dim3 dimensions, float value){
 
-  printf("value = %f\n", value);
+  //TODO: doesn't really make sense to run this as a 2D kernel given contents of setDeviceArrayConstant_float
   setDeviceArrayConstant_float<<<dimensions.x*dimensions.y*dimensions.z/1024+1, 1024>>>(theDeviceArray, (unsigned int)(dimensions.x * dimensions.y * dimensions.z), value);
-
-  printf("kernel %d\n", (dimensions.x*dimensions.y*dimensions.z/1024+1) * 1024);
 
   return cudaPeekAtLastError();
 
@@ -105,6 +102,19 @@ extern "C" cudaError_t setDeviceArrayConstantWrapper_float(float* theDeviceArray
 
 //can only upsample in d, h and w, upsample of n or c is not useful here (or anywhere, probably)
 //this does not handle bad parameters; output dimensions must be input dimensions dot upscale dimensions
+///
+/// \brief upscaleLayer3DKernel_float - Upscales input and puts result in output
+/// \param input
+/// \param output
+/// \param outputDimsN
+/// \param outputDimsC
+/// \param outputDimsD
+/// \param outputDimsH
+/// \param outputDimsW
+/// \param upscaleD
+/// \param upscaleH
+/// \param upscaleW
+///
 __global__ void upscaleLayer3DKernel_float(float* input, float* output, int outputDimsN, int outputDimsC, int outputDimsD, int outputDimsH, int outputDimsW,
                                            int upscaleD, int upscaleH, int upscaleW){
 
@@ -116,7 +126,6 @@ __global__ void upscaleLayer3DKernel_float(float* input, float* output, int outp
     int H = outputDimsH;
     int W = outputDimsW;
 
-    //THIS WORKS, IDK WHY
     int x = N * C * D * H * W;
 
     int n = ncdhw / (C*D*H*W);
@@ -124,8 +133,6 @@ __global__ void upscaleLayer3DKernel_float(float* input, float* output, int outp
     int d = (ncdhw / (H * W)) % D;
     int h = (ncdhw / W) % H;
     int w = ncdhw % W;
-
-    //printf("n = %d, c = %d, d = %d, h = %d, w = %d\n", n, c, d, h, w);
 
     if(n >= N || c >= C || d >= D || h >= H || w >= W)
         return;
@@ -149,16 +156,13 @@ __global__ void upscaleLayer3DKernel_double(double* input, double* output, int o
     int H = outputDimsH;
     int W = outputDimsW;
 
-    //THIS WORKS, IDK WHY
     int x = N * C * D * H * W;
 
     int n = ncdhw / (C*D*H*W);
     int c = (ncdhw / (D*H*W)) % C;
     int d = (ncdhw / (H * W)) % D;
     int h = (ncdhw / W) % H;
-    int w = ncdhw % W;
-
-    //printf("n = %d, c = %d, d = %d, h = %d, w = %d\n", n, c, d, h, w);
+    int w = ncdhw % W;;
 
     if(n >= N || c >= C || d >= D || h >= H || w >= W)
         return;
@@ -171,102 +175,10 @@ __global__ void upscaleLayer3DKernel_double(double* input, double* output, int o
     output[(((n * C + c) * D + d) * H + h) * W + w] = input[(((n * Cin + c) * Din + d/upscaleD) * Hin + h/upscaleH) * Win + w/upscaleW];
 }
 
-/*
-__global__ void upscaleLayer3DKernel_half(void* input, void* output, int* upscale){
-
-
-}
-*/
-
-//this thing was trilinear upsampling (might have incorrect offsetting, and does not handle edges); model uses nearest upsampling (VolumetricUpSamplinbgNearest)
-
-/*
-//in this kernel, n, c, d, h, and w correspond to output
-//for now, the kernel will ignore the scaling parameters for the n and c dimensions, since these are not normally scaled
-//this reduces the number of elements to be interpolated from 32 to 8
-
-//this interpolates int that output(x,y,z
-__global__ void upscaleLayer3DKernel_float(float* input, float* output, int* outputDims, int* upscale){
-
-//#define N outputDims[0]
-//#define C outputDims[1]
-#define D outputDims[2]
-#define H outputDims[3]
-#define W outputDims[4]
-#define output3(d,h,w) output[(d * H + h) * W + w] //allows 3-dimension retrieval of input value
-#define  input3(d,h,w)  input[(d * H + h) * W + w] //allows 3-dimension retrieval of output value
-
-  //this'll probably need more thought for optimization
-  //int ncd = threadIdx.x + (blockIdx.x * blockDim.x); //replace defines
-  int d = threadIdx.x + (blockIdx.x * blockDim.x);
-  int h = threadIdx.y + (blockIdx.y * blockDim.y);
-  int w = threadIdx.z + (blockIdx.z * blockDim.z);
-
-  //int d = ncd % D;
-  //int c = (ncd / D) % C;
-  //int n = ncd / (C * D);
-
-
-  if(h > H || d > D || w > W)
-    return;
-
-  int d0 = d/D;
-  int h0 = h/H;
-  int w0 = w/W;
-
-  float dd = (d % D) / D;
-  float hd = (h % H) / H;
-  float wd = (w % W) / W;
-
-  float c00 = input3(  d0,  h0,  w0) * (1 - dd) + input3(d0+1,  h0,  w0);
-  float c01 = input3(  d0,  h0,w0+1) * (1 - dd) + input3(d0+1,  h0,w0+1);
-  float c10 = input3(  d0,  h0,w0+1) * (1 - dd) + input3(d0+1,  h0,w0+1);
-  float c11 = input3(  d0,h0+1,w0+1) * (1 - dd) + input3(d0+1,h0+1,w0+1);
-
-  float c0 =  c00 * (1 - hd) + c10 * hd;
-  float c1 =  c01 * (1 - hd) + c11 * hd;
-
-  output3(d,h,w) = c0 * (1 - wd) + c1 * wd;
-
-  //output3(d,h,w) = input3(d/D, h/H, w/W) * (x % upscale) + input3(d,h,w);
-}
-*/
-
-/*
-__global__ void volumetricUpSamplingNearestForward(
-    const int ratio, THCDeviceTensor<float, 5> in,
-    THCDeviceTensor<float, 5> out) {
-  const int pnt_id = threadIdx.x + blockIdx.x * blockDim.x;
-  const int chan = blockIdx.y;
-  const int batch = blockIdx.z;
-  if (pnt_id >= (out.getSize(2) * out.getSize(3) * out.getSize(4))) {
-    return;
-  }
-  const int x = pnt_id % out.getSize(4);
-  const int y = (pnt_id / out.getSize(4)) % out.getSize(3);
-  const int z = pnt_id / (out.getSize(3) * out.getSize(4));
-
-  const int xin = x / ratio;
-  const int yin = y / ratio;
-  const int zin = z / ratio;
-  const float inVal = in[batch][chan][zin][yin][xin];
-  out[batch][chan][z][y][x] = inVal;
-}
-*/
-
 extern "C" cudaError_t upscaleLayer3DKernelWrapper_float(float* input, float* output, int* outputDims, int* upscale){
 
-/*
-    printf("\n\nNot kernel:\n");
-    for(int i=0;i<5;i++)
-        printf("outputDims[%d] = %d\n",i,outputDims[i]);
-    for(int i=0;i<3;i++)
-        printf("upscale[%d] = %d\n",i,upscale[i]);
-*/
     upscaleLayer3DKernel_float<<<outputDims[0]*outputDims[1]*outputDims[2]*outputDims[3]*outputDims[4]/1024 + 1, 1024>>>(input, output, outputDims[0], outputDims[1], outputDims[2], outputDims[3], outputDims[4],
                                                                                                                          upscale[0], upscale[1], upscale[2]);
-    //printf("\n\n");
-    //checkCudaErrors(cudaDeviceSynchronize());
     return cudaPeekAtLastError();
 }
 
@@ -291,11 +203,7 @@ __global__ void multiplyTensorByScalar_float(float *tensor, float *tensorOut, si
 
   if(i < tensorSize){
     tensorOut[i] = tensor[i] * scalar;
-    //if(i % (128*128))
-    //  printf("tensorOut[%d] = %f\n", i, tensorOut[i]);
     }
-
-  //__syncthreads();
 }
 
 __global__ void multiplyTensorByScalar_double(double *tensor, double *tensorOut, size_t tensorSize, double scalar){
@@ -304,36 +212,8 @@ __global__ void multiplyTensorByScalar_double(double *tensor, double *tensorOut,
 
   if(i < tensorSize){
     tensorOut[i] = tensor[i] * scalar;
-    //if(i % (128*128))
-    //  printf("tensorOut[%d] = %f\n", i, tensorOut[i]);
     }
-
-  //__syncthreads();
 }
-
-//TODO: Also this
-/*
-__global__ void multiplyTensorByScalar_half(void  int i = threadIdx.x+(blockIdx.x*BLOCK_SIZE_DIVISION);
-
-  if(i < tensorSize){
-    tensorOut[i] = tensor[i] * scalar;
-    //if(i % (128*128))
-    //  printf("tensorOut[%d] = %f\n", i, tensorOut[i]);
-    }
-
-  __syncthreads(); *tensor, void *tensorOut, size_t tensorSize, void *scalar){
-
-  int i = threadIdx.x+(blockIdx.x*BLOCK_SIZE_DIVISION);
-
-  if(i < tensorSize){
-    tensorOut[i] = tensor[i] * scalar;
-    //if(i % (128*128))
-    //  printf("tensorOut[%d] = %f\n", i, tensorOut[i]);
-    }
-
-  __syncthreads();
-}
-*/
 
 extern "C" cudaError_t multiplyTensorByScalarWrapper_float(float *tensor, float *tensorOut, size_t tensorSize, float scalar){
   multiplyTensorByScalar_float<<<tensorSize/BLOCK_SIZE_DIVISION + bool(tensorSize%BLOCK_SIZE_DIVISION), BLOCK_SIZE_DIVISION>>>(tensor, tensorOut, tensorSize, scalar);
@@ -355,26 +235,28 @@ extern "C" cudaError_t multiplyTensorByScalarWrapper_half(void *tensor, void *te
   return cudaPeekAtLastError();
 }
 
-
-//overloading doesn't work in C
-
-//might need forceinline
-//if changing this, the others need to be changed in the same way (..._double) or an analogous way (..._half)
+//TODO: might need forceinline
+//TODO: find code this is based on
+//Note: if changing this, the others need to be changed in the same way (..._double) or an analogous way (..._half)
+///
+/// \brief reduceSummation_float - do one step of parallel sum reduction, for 1D float arrays
+/// \param input - current input for this step
+/// \param output - current output for this step
+/// \param len - length of input
+///
 __global__ void reduceSummation_float(float * input, float * output, size_t len) {
-    //@@ Load a segment of the input vector into shared memory
+    // Load a segment of the input vector into shared memory
     __shared__ float partialSum[2 * BLOCK_SIZE];
     unsigned int t = threadIdx.x, start = 2 * blockIdx.x * BLOCK_SIZE;
     if (start + t < len){
        partialSum[t] = input[start + t];}
-       //if(partialSum[t] == NAN)
-       //  infoMsg("ahoSum\n");
     else
        partialSum[t] = 0;
     if (start + BLOCK_SIZE + t < len)
        partialSum[BLOCK_SIZE + t] = input[start + BLOCK_SIZE + t];
     else
        partialSum[BLOCK_SIZE + t] = 0;
-    //@@ Traverse the reduction tree
+    // Traverse the reduction tree
     for (unsigned int stride = BLOCK_SIZE; stride >= 1; stride >>= 1) {
        __syncthreads();
        if (t < stride)
@@ -382,14 +264,20 @@ __global__ void reduceSummation_float(float * input, float * output, size_t len)
     }
 
     __syncthreads();
-    //@@ Write the computed sum of the block to the output vector at the
-    //@@ correct index
+    // Write the computed sum of the block to the output vector at the
+    // correct index
     if (t == 0)
        output[blockIdx.x] = partialSum[0];
 
     //recursive kernel functions only work for __device__ kernels, and only on Fermi architecture, so don't try it
 }
 
+///
+/// \brief reduceSummation_double - do one step of parallel sum reduction, for 1D double arrays
+/// \param input - current input for this step
+/// \param output - current output for this step
+/// \param len - length of input
+///
 __global__ void reduceSummation_double(double * input, double * output, size_t len) {
     //@@ Load a segment of the input vector into shared memory
     __shared__ double partialSum[2 * BLOCK_SIZE];
@@ -420,50 +308,12 @@ __global__ void reduceSummation_double(double * input, double * output, size_t l
     //recursive kernel functions only work for __device__ kernels, and only on Fermi architecture, so don't try it
 }
 
-
-//TODO
-/*
-//using half2 instead of half is faster according to https://devblogs.nvidia.com/mixed-precision-programming-cuda-8/
-//idk whether cudnn (when using CUDNN_DATA_HALF) wants half or half2, so here's both versions; just swap the kernel call in reduceSummationWrapper_half
-__global__ void reduceSummation_half(void * input, void * output, size_t len) {
-    //@@ Load a segment of the input vector into shared memory
-    __shared__ double partialSum[2 * BLOCK_SIZE];
-    unsigned int t = threadIdx.x, start = 2 * blockIdx.x * BLOCK_SIZE;
-    if (start + t < len){
-       partialSum[t] = input[start + t];}
-       //if(partialSum[t] == NAN)
-       //  infoMsg("ahoSum\n");}
-    else
-       partialSum[t] = 0;
-    if (start + BLOCK_SIZE + t < len)
-       partialSum[BLOCK_SIZE + t] = input[start + BLOCK_SIZE + t];
-    else
-       partialSum[BLOCK_SIZE + t] = 0;
-    //@@ Traverse the reduction tree
-    for (unsigned int stride = BLOCK_SIZE; stride >= 1; stride >>= 1) {
-       __syncthreads();
-       if (t < stride)
-          partialSum[t] += partialSum[t+stride];
-    }
-
-    __syncthreads();
-    //@@ Write the computed sum of the block to the output vector at the
-    //@@ correct index
-    if (t == 0)
-       output[blockIdx.x] = partialSum[0];
-
-    //recursive kernel functions only work for __device__ kernels, and only on Fermi architecture, so don't try it
-}
-*/
-
 #define numBlocks tensorOutSize
 #define threadsPerBlock BLOCK_SIZE
 extern "C" cudaError_t reduceSummationWrapper_float(float *tensor, float *tensorOut, size_t tensorSize, size_t tensorOutSize){
 
   reduceSummation_float<<<numBlocks, threadsPerBlock>>>(tensor, tensorOut, tensorSize);
   return cudaPeekAtLastError();
-
-  //checkCudaErrors(cudaDeviceSynchronize());
 }
 
 extern "C" cudaError_t reduceSummationWrapper_double(double *tensor, double *tensorOut, size_t tensorSize, size_t tensorOutSize){
@@ -477,24 +327,27 @@ extern "C" cudaError_t reduceSummationWrapper_half(void *tensor, void *tensorOut
 
   errorMsg("Half support not yet implemented (%s:%d)\n", __FILE__, __LINE__);
   exit(1);
-  //reduceSummationWrapper_half<<<numBlocks, threadsPerBlock>>>(tensor, tensorOut, tensorSize);
   return cudaPeekAtLastError();
 }
 
-__global__ void reduceSummationVariance_float(float * input, float * output, size_t len, float average){//}, size_t *maxIndex) {
+///
+/// \brief reduceSummationVariance_float - modified parallel reduction step for variance calculation. Average must have been calculated already through reduceSummation_float
+/// \param input - current input for this step
+/// \param output - current output for this step
+/// \param len - length of input
+/// \param average - average of values in original input (at start of reduction loop)
+///
+__global__ void reduceSummationVariance_float(float * input, float * output, size_t len, float average){
     //@@ Load a segment of the input vector into shared memory
     __shared__ float partialSum[2 * BLOCK_SIZE];
     unsigned int t = threadIdx.x, start = 2 * blockIdx.x * BLOCK_SIZE;
     if (start + t < len){
-       partialSum[t] = (input[start + t] - average) * (input[start + t] - average);// / len; //powf((input[start + BLOCK_SIZE + t] - average), 2); //for 1st step of variance calculation
-       //printf("reduceSummationVariance_float, threadIdx = %d, start = %d\n, input", int(threadIdx.x), int(start));
-       //*maxIndex = start + BLOCK_SIZE + t;
+       partialSum[t] = (input[start + t] - average) * (input[start + t] - average);//for 1st step of variance calculation
       }
     else
        partialSum[t] = 0;
     if (start + BLOCK_SIZE + t < len){
-       partialSum[BLOCK_SIZE + t] = (input[start + BLOCK_SIZE + t] - average) * (input[start + BLOCK_SIZE + t] - average);// / len; //powf(input[start + BLOCK_SIZE + t] - average, 2); //for 1st step of variance calculation
-       //*maxIndex = start + BLOCK_SIZE + t;
+       partialSum[BLOCK_SIZE + t] = (input[start + BLOCK_SIZE + t] - average) * (input[start + BLOCK_SIZE + t] - average); //for 1st step of variance calculation
     }
     else
        partialSum[BLOCK_SIZE + t] = 0;
@@ -513,19 +366,24 @@ __global__ void reduceSummationVariance_float(float * input, float * output, siz
     //recursive kernel functions only work for __device__ kernels, and only on Fermi architecture, so don't try it
 }
 
-__global__ void reduceSummationVariance_double(double * input, double * output, size_t len, double average){//}, size_t *maxIndex) {
+///
+/// \brief reduceSummationVariance_double - modified parallel reduction step for variance calculation. Average must have been calculated already through reduceSummation_double
+/// \param input - current input for this step
+/// \param output - current output for this step
+/// \param len - length of input
+/// \param average - average of values in original input (at start of reduction loop)
+///
+__global__ void reduceSummationVariance_double(double * input, double * output, size_t len, double average){
     //@@ Load a segment of the input vector into shared memory
     __shared__ double partialSum[2 * BLOCK_SIZE];
     unsigned int t = threadIdx.x, start = 2 * blockIdx.x * BLOCK_SIZE;
     if (start + t < len){
-       partialSum[t] = (input[start + BLOCK_SIZE + t] - average) * (input[start + BLOCK_SIZE + t] - average); //powf((input[start + BLOCK_SIZE + t] - average), 2); //for 1st step of variance calculation
-       //*maxIndex = start + BLOCK_SIZE + t;
+       partialSum[t] = (input[start + BLOCK_SIZE + t] - average) * (input[start + BLOCK_SIZE + t] - average); //for 1st step of variance calculation
       }
     else
        partialSum[t] = 0;
     if (start + BLOCK_SIZE + t < len){
-       partialSum[BLOCK_SIZE + t] = (input[start + BLOCK_SIZE + t] - average) * (input[start + BLOCK_SIZE + t] - average); //powf(input[start + BLOCK_SIZE + t] - average, 2); //for 1st step of variance calculation
-       //*maxIndex = start + BLOCK_SIZE + t;
+       partialSum[BLOCK_SIZE + t] = (input[start + BLOCK_SIZE + t] - average) * (input[start + BLOCK_SIZE + t] - average); //for 1st step of variance calculation
     }
     else
        partialSum[BLOCK_SIZE + t] = 0;
@@ -537,46 +395,12 @@ __global__ void reduceSummationVariance_double(double * input, double * output, 
     }
     //@@ Write the computed sum of the block to the output vector at the
     //@@ correct index
-    //__syncthreads();
+    __syncthreads();
     if (t == 0)
        output[blockIdx.x] = partialSum[0];
 
     //recursive kernel functions only work for __device__ kernels, and only on Fermi architecture, so don't try it
 }
-
-//TODO eventually
-/*
-__global__ void reduceSummationVariance_double(double * input, double * output, size_t len, double average){//}, size_t *maxIndex) {
-    //@@ Load a segment of the input vector into shared memory
-    __shared__ double partialSum[2 * BLOCK_SIZE];
-    unsigned int t = threadIdx.x, start = 2 * blockIdx.x * BLOCK_SIZE;
-    if (start + t < len){
-       partialSum[t] = (input[start + BLOCK_SIZE + t] - average) * (input[start + BLOCK_SIZE + t] - average); //powf((input[start + BLOCK_SIZE + t] - average), 2); //for 1st step of variance calculation
-       //*maxIndex = start + BLOCK_SIZE + t;
-      }
-    else
-       partialSum[t] = 0;
-    if (start + BLOCK_SIZE + t < len){
-       partialSum[BLOCK_SIZE + t] = (input[start + BLOCK_SIZE + t] - average) * (input[start + BLOCK_SIZE + t] - average); //powf(input[start + BLOCK_SIZE + t] - average, 2); //for 1st step of variance calculation
-       //*maxIndex = start + BLOCK_SIZE + t;
-    }
-    else
-       partialSum[BLOCK_SIZE + t] = 0;
-    //@@ Traverse the reduction tree
-    for (unsigned int stride = BLOCK_SIZE; stride >= 1; stride >>= 1) {
-       __syncthreads();
-       if (t < stride)
-          partialSum[t] += partialSum[t+stride];
-    }
-    //@@ Write the computed sum of the block to the output vector at the
-    //@@ correct index
-    //__syncthreads();
-    if (t == 0)
-       output[blockIdx.x] = partialSum[0];
-
-    //recursive kernel functions only work for __device__ kernels, and only on Fermi architecture, so don't try it
-}
-*/
 
 extern "C" cudaError_t reduceSummationVarianceWrapper_float(float *tensor, float *tensorOut, size_t tensorSize, size_t tensorOutSize, float average){
 
@@ -591,7 +415,6 @@ extern "C" cudaError_t reduceSummationVarianceWrapper_double(double *tensor, dou
 }
 
 extern "C" cudaError_t reduceSummationVarianceWrapper_half(void *tensor, void *tensorOut, size_t tensorSize, void* average){
-//                                                                                            ^--- ?
 
   errorMsg("Half support not yet implemented (%s:%d)\n", __FILE__, __LINE__);
   exit(1);
@@ -602,148 +425,12 @@ extern "C" cudaError_t reduceSummationVarianceWrapper_half(void *tensor, void *t
 #undef numBlocks
 #undef threadsPerBlock
 
-//this might need variants for each of float, half and double
-//all mallocs, callocs and cudaMallocs need to be in the
-
-/*
-#define FLOAT float
-#define numBlocks tensorOutSize
-#define threadsPerBlock BLOCK_SIZE
-//#define multiplyByVarianceDevice
-extern "C" FLOAT multiplyByVarianceDevice(FLOAT* tensor, FLOAT* tensorOut, size_t tensorSize){
-
-  FLOAT* tensorOutInitial = tensorOut;
-  size_t tensorSizeInitial = tensorSize;
-  //dim3 numBlocks = dim3(NUM_BLOCKS_X, NUM_BLOCKS_Y, NUM_BLOCKS_Z);
-  //dim3 threadsPerBlock = dim3(THREADSPERBLOCK_X, THREADSPERBLOCK_Y, THREADSPERBLOCK_Z);
-
-  //this should make the output buffering stop. doesn't work on printfs in kernels
-  //setvbuf(stdout, NULL, _IONBF, 0);
-
-  size_t tensorOutSize = tensorSize / (BLOCK_SIZE << 1) + bool(tensorSize % (BLOCK_SIZE<<1));
-
-  //
-  //starting here, we calculate the average
-  //
-
-
-
-  //CUDA_CALL(cudaDeviceSynchronize());
-
-  FLOAT *sum;
-  CUDA_CALL(cudaMalloc((void**)&sum, sizeof(FLOAT)));
-
-  //debugSummation<<<1,1>>>(tensor, tensorSize);
-
-  reduceSummation<<<numBlocks, threadsPerBlock>>>(tensor, tensorOut, tensorSize);
-  tensorSize = tensorOutSize;
-  tensorOutSize = tensorSize / (BLOCK_SIZE << 1) + bool(tensorSize % (BLOCK_SIZE<<1));
-  printf("tensorOutSize %d\n", tensorOutSize);
-
-  //this gives a slightly different result for some reason; see how it acts after multiple sum reductions
-  //debugSummation<<<1,1>>>(tensorOut, tensorSize);
-
-  //in this configuration, the initial tensor is destroyed
-  while(tensorSize > 1){
-      reduceSummation<<<numBlocks, threadsPerBlock>>>(tensorOut, tensorOut + tensorSize, tensorSize);
-      tensorOut += tensorSize;
-      tensorSize = tensorOutSize;
-      tensorOutSize = tensorSize / (BLOCK_SIZE << 1) + bool(tensorSize % (BLOCK_SIZE<<1));
-
-      //debugSummation<<<1,1>>>(tensorOut, tensorSize);
-
-      //printf("average %d\n", tensorOutSize);
-    }
-
-  //printf("\n");
-
-  //tensorOut[0] now contains the sum of the elements
-
-  FLOAT average;
-  CUDA_CALL(cudaMemcpy(&average, tensorOut, sizeof(FLOAT), cudaMemcpyDeviceToHost)); //cudaMemcpy(void *dst, const void *src, size_t count, enum cudaMemcpyKind kind
-
-  //printf();
-
-  //need to multiply by INITIAL tensorSize
-  average /= tensorSizeInitial;
-
-  //printf("average device %f\n", average);
-
-  //
-  //now we can calculate the variance
-  //with reduceSummationVariance, the partial sum gets the values (x^2-average) in the first summation reduction
-  //
-
-  tensorSize = tensorSizeInitial;
-  tensorOutSize = tensorSize / (BLOCK_SIZE << 1) + bool(tensorSize % (BLOCK_SIZE<<1));
-
-  //reset the position of the output pointer
-  tensorOut = tensorOutInitial;
-
-  reduceSummationVariance<<<numBlocks, threadsPerBlock>>>(tensor, tensorOut, tensorSize, average);
-  tensorSize = tensorOutSize;
-  tensorOutSize = tensorSize / (BLOCK_SIZE << 1) + bool(tensorSize % (BLOCK_SIZE<<1));
-
-  //debugSummation<<<1,1>>>(tensorOut, tensorSize);
-
-  printf("tensorOutSize %d", tensorOutSize);
-
-  //printArray<<<1,1>>>(tensorOut, tensorSize);
-
-  //DON'T flip the pointers if using offsets
-  //temp = tensor;
-  //tensor = tensorOut;
-  //tensorOut = temp;
-
-  while(tensorSize > 1){
-      reduceSummation<<<numBlocks, threadsPerBlock>>>(tensorOut, tensorOut + tensorSize, tensorSize);
-      tensorOut += tensorSize;
-      tensorSize = tensorOutSize;
-      tensorOutSize = tensorSize / (BLOCK_SIZE << 1) + bool(tensorSize % (BLOCK_SIZE<<1));
-
-      //debugSummation<<<1,1>>>(tensorOut, tensorSize);
-
-      //printf("variance %d\n", tensorOutSize);
-    }
-
-  //printf("\n");
-
-  //
-  //now we multiply by the standard deviation
-  //
-
-  FLOAT standardDeviation;
-  CUDA_CALL(cudaMemcpy(&standardDeviation, tensorOut, sizeof(FLOAT), cudaMemcpyDeviceToHost));
-
-  standardDeviation /= tensorSizeInitial;
-
-  printf("square standardDeviation device %f\n", standardDeviation);
-
-  standardDeviation = sqrt(standardDeviation);
-
-  printf("standardDeviation device %f\n", standardDeviation);
-
-  tensorSize = tensorSizeInitial;
-
-  tensorOut = tensorOutInitial;
-
-  multiplyByVariance<<<tensorSize/BLOCK_SIZE_DIVISION + bool(tensorSize%BLOCK_SIZE_DIVISION), BLOCK_SIZE_DIVISION>>>(tensor, tensorOut, tensorSizeInitial, standardDeviation);
-
-  printf("tensorOut multiplyByVarianceDevice -> %p\n", tensorOut);
-  printf("tensor multiplyByVarianceDevice -> %p\n", tensor);
-
-  printArray<<<1,1>>>(tensor, 16);
-
-  //finalTensorOutput = tensor;
-
-  //printf("standardDeviation device %f\n", standardDeviation);
-  return standardDeviation;
-}
-*/
-
+///
+/// \brief printfDebug - print string "DEBUG printfDebug" to check if output is being printed to screen when printf is used from a CUDA kernel
+///
 __global__ void printfDebug(){
 
-  printf("eh");
+  printf("DEBUG printfDebug");
 }
 
 __global__ void printElement(float* normalArray, cudaExtent dataExtent){
@@ -763,44 +450,34 @@ __global__ void printTextureContentsFloat4(cudaTextureObject_t dataTexture, cuda
   int y = blockIdx.y*blockDim.y+threadIdx.y;
   int z = blockIdx.z*blockDim.z+threadIdx.z;
 
-  //printf("%d %d %d", x, y, z);
-/*
-  if(x > 10 || y > 10 || z > 10)
-    return;
-*/
   if(x >= dataExtent.width || y >= dataExtent.height || z >= dataExtent.depth)
     return;
 
   float4 here = tex3D<float4>(dataTexture,x,y,z);
 
-  //printf("blah");
-
   if(here.x!=0 || here.y!=0 || here.z!=0)
-  //if(isnan(here.x) || isnan(here.y) || isnan(here.z))
     printf("dataTexture[%d][%d][%d] = ( %f, %f, %f)\n", x,y,z,here.x, here.y, here.z);
 
   __syncthreads();
 }
 
+///
+/// \brief printTextureContents - print all NONZERO elements in a CUDA texture. Note that they are not printed in any order.
+/// \param dataTexture - the texture
+/// \param dataExtent - dimension limits of texture
+///
 __global__ void printTextureContents(cudaTextureObject_t dataTexture, cudaExtent dataExtent){
 
   int x = blockIdx.x*blockDim.x+threadIdx.x;
   int y = blockIdx.y*blockDim.y+threadIdx.y;
   int z = blockIdx.z*blockDim.z+threadIdx.z;
 
-  //printf("%d %d %d", x, y, z);
-/*
-  if(x > 10 || y > 10 || z > 10)
-    return;
-*/
   if(x >= dataExtent.width || y >= dataExtent.height || z >= dataExtent.depth)
     return;
 
   float here = tex3D<float>(dataTexture,x,y,z);
 
-  //printf("blah");
-
-  if(here!=0)
+  if(here!=0) //remove to print all zeros too
     printf("dataTexture[%d][%d][%d] = %f\n", x,y,z,here);
 
   __syncthreads();
@@ -839,10 +516,6 @@ printDataCudaArrayContents3DWrapper(cudaArray* data){
 
   printTextureContentsFloat4<<<dim3(BLOCKSIZE_X, BLOCKSIZE_Y, BLOCKSIZE_Z), dim3(THREADSPERBLOCK_X, THREADSPERBLOCK_Y, THREADSPERBLOCK_Z)>>>(dataTexture, dataExtent);
 
-  //checkCudaErrors(cudaDeviceSynchronize());
-
-  //printTextureContents<<<dim3(MAXTEXTURESIZE_X/64+1, MAXTEXTURESIZE_Y/64+1, MAXTEXTURESIZE_Z/64+1), dim3(64,64,64)>>>(dataTexture, dataExtent);
-
   return cudaPeekAtLastError();
 }
 
@@ -851,8 +524,6 @@ __global__ void copyCudaArrayToDeviceArray_float(cudaTextureObject_t dataTexture
   int x = blockIdx.x*blockDim.x+threadIdx.x;
   int y = blockIdx.y*blockDim.y+threadIdx.y;
   int z = blockIdx.z*blockDim.z+threadIdx.z;
-
-  //printf("%d %d %d", x, y, z);
 
   if(x >= dataExtent.width || y >= dataExtent.height || z >= dataExtent.depth)
     return;
@@ -866,32 +537,23 @@ __global__ void copyCudaArrayToDeviceArray_float(cudaTextureObject_t dataTexture
   if(msg == 10 && here!=0.0f && x%4==0 && y==32 && z==32)
       printf("obstacles[%d,%d,%d] = %f\n", x, y, z, here);
 
-  //if(here != 0.0f && msg >=0)
-  //if(here != 0.0f && msg >= 0)
-  //  printf("%d %d %d = %f, %p %d\n", x, y, z, here, (void*)(dst), msg);
-
   dst[xyz] = here;
-/*
-  if(x == 55 && y == 0 && z == 0){
-      printf("\n%f\n",here);
-      printf("\n%f %d\n",dst[xyz],xyz);}
-*/
-  //__syncthreads();
 }
 
+///
+/// \brief copyCudaArrayToDeviceArray_double - copy contents of texture to double CPU array
+/// \param dataTexture - CUDA texture
+/// \param dst - CPU array
+/// \param dataExtent
+///
 __global__ void copyCudaArrayToDeviceArray_double(cudaTextureObject_t dataTexture, double* dst, cudaExtent dataExtent){
 
   int x = blockIdx.x*blockDim.x+threadIdx.x;
   int y = blockIdx.y*blockDim.y+threadIdx.y;
   int z = blockIdx.z*blockDim.z+threadIdx.z;
 
-  //printf("%d %d %d", x, y, z);
-
   if(x >= dataExtent.width || y >= dataExtent.height || z >= dataExtent.depth)
     return;
-
-  //tex3D<> has no double variant, so use the non-template variant I guess
-  //double here = tex3D<double>(dataTexture,x,y,z);
 
   //see https://stackoverflow.com/questions/35137213/texture-objects-for-doubles
   uint2 hereUint2;
@@ -901,45 +563,8 @@ __global__ void copyCudaArrayToDeviceArray_double(cudaTextureObject_t dataTextur
 
   int xyz = x + y * dataExtent.width + z * dataExtent.width * dataExtent.height;
 
-  //printf("%d %d %d = %f\n", x, y, z, here);
-
   dst[xyz] = here;
-/*
-  if(x == 55 && y == 0 && z == 0){
-      printf("\n%f\n",here);
-      printf("\n%f %d\n",dst[xyz],xyz);}
-*/
-  //__syncthreads();
 }
-
-//TODO: this as well
-/*
-__global__ void copyCudaArrayToDeviceArray_half(cudaTextureObject_t dataTexture, half* dst, cudaExtent dataExtent){
-
-  int x = blockIdx.x*blockDim.x+threadIdx.x;
-  int y = blockIdx.y*blockDim.y+threadIdx.y;
-  int z = blockIdx.z*blockDim.z+threadIdx.z;
-
-  //printf("%d %d %d", x, y, z);
-
-  if(x >= dataExtent.width || y >= dataExtent.height || z >= dataExtent.depth)
-    return;
-
-  half here = tex3D<half>(dataTexture,x,y,z);
-
-  int xyz = x + y * dataExtent.width + z * dataExtent.width * dataExtent.height;
-
-  //printf("%d %d %d = %f\n", x, y, z, here);
-
-  dst[xyz] = here;
-
-  //if(x == 55 && y == 0 && z == 0){
-  //    printf("\n%f\n",here);
-  //    printf("\n%f %d\n",dst[xyz],xyz);}
-
-  __syncthreads();
-}
-*/
 
 //call with float,float4 or double,double4
 template<typename T, typename T4>
@@ -955,9 +580,6 @@ __global__ void copyCudaArrayToDeviceArray3D(cudaTextureObject_t srcTexture, T* 
         return;
 
     float4 dstVal = tex3D<T4>(srcTexture, x, y, z);
-
-    //if(dstVal.x !=0 || dstVal.y !=0 || dstVal.z !=0)
-    //    printf("srcTexture[ %d, %d, %d] = (%f, %f, %f)\n", x, y, z, dstVal.x, dstVal.y, dstVal.z);
 
     dst[num*3] = isnan(dstVal.x) ? 0 : dstVal.x;
     dst[num*3+1] = isnan(dstVal.y) ? 0 : dstVal.y;
@@ -1000,9 +622,6 @@ copyCudaArrayToDeviceArrayWrapper3D_float(cudaArray* src, float* dst){
     return cudaPeekAtLastError();
 }
 
-//this associates a texture with a cudaArray, to copy it to a device array
-//this is for float contents, might make it a template (?)
-//might be faster to make objects only once and send them through (memory increase is probably negligible)
 extern "C" cudaError_t
 copyCudaArrayToDeviceArrayWrapper_float(cudaArray* src, float* dst, int msg){
 
@@ -1027,17 +646,10 @@ copyCudaArrayToDeviceArrayWrapper_float(cudaArray* src, float* dst, int msg){
 
     checkCudaErrors(cudaCreateTextureObject(&srcTexture, &srcResourceDesc, &srcTextureDesc, NULL));
 
-    //I don't think this happens
-    //printf("\nPrinting cudaArray contents...\n");
-
-    //these might need to be the other way around
-    //also they may need to be constant, or use templates
-
     infoMsg("Running kernel with dim3( %d, %d, %d), dim3( %d, %d, %d)", BLOCKSIZE_X, BLOCKSIZE_Y, BLOCKSIZE_Z, THREADSPERBLOCK_X, THREADSPERBLOCK_Y, THREADSPERBLOCK_Z);
 
     copyCudaArrayToDeviceArray_float<<<dim3(BLOCKSIZE_X, BLOCKSIZE_Y, BLOCKSIZE_Z), dim3(THREADSPERBLOCK_X, THREADSPERBLOCK_Y, THREADSPERBLOCK_Z)>>>(srcTexture, dst, srcExtent, msg);
 
-    //checkCudaErrors(cudaDeviceSynchronize());
     return cudaPeekAtLastError();
 }
 
@@ -1065,20 +677,14 @@ copyCudaArrayToDeviceArrayWrapper_double(cudaArray* src, double* dst){
 
     checkCudaErrors(cudaCreateTextureObject(&srcTexture, &srcResourceDesc, &srcTextureDesc, NULL));
 
-    //printf("\nPrinting cudaArray contents...\n");
-
-    //these might need to be the other way around
-    //also they may need to be constant, or use templates
-
     infoMsg("Running kernel with dim3( %d, %d, %d), dim3( %d, %d, %d)", BLOCKSIZE_X, BLOCKSIZE_Y, BLOCKSIZE_Z, THREADSPERBLOCK_X, THREADSPERBLOCK_Y, THREADSPERBLOCK_Z);
 
     copyCudaArrayToDeviceArray_double<<<dim3(BLOCKSIZE_X, BLOCKSIZE_Y, BLOCKSIZE_Z), dim3(THREADSPERBLOCK_X, THREADSPERBLOCK_Y, THREADSPERBLOCK_Z)>>>(srcTexture, dst, srcExtent);
 
-    //checkCudaErrors(cudaDeviceSynchronize());
     return cudaPeekAtLastError();
 }
 
-//TODO again
+//TODO
 extern "C" cudaError_t
 copyCudaArrayToDeviceArrayWrapper_half(cudaArray* src, void* dst){
 
@@ -1088,24 +694,15 @@ copyCudaArrayToDeviceArrayWrapper_half(cudaArray* src, void* dst){
   return cudaPeekAtLastError();
 }
 
-//BOOKMARK
 __global__ void copyDeviceArrayToCudaArray_float(cudaSurfaceObject_t dstSurface, cudaExtent dataExtent, float* src){
 
   int x = blockIdx.x*blockDim.x+threadIdx.x;
   int y = blockIdx.y*blockDim.y+threadIdx.y;
   int z = blockIdx.z*blockDim.z+threadIdx.z;
 
-  //x=0;
-  //y=0;
-  //z=0;
-
   if(x >= dataExtent.width || y >= dataExtent.height || z >= dataExtent.depth)
     return;
-/*
-  if(x%10==0 && y%10==0 && z%10==0)
-    infoMsg("src[%d][%d][%d] = %f", z,y,x,src[x + y * dataExtent.width + z * dataExtent.width * dataExtent.height]);
-    //%f should work for doubles and floats, due to the float being promoted to double (at least in C)
-*/
+
   surf3Dwrite(src[x + y * dataExtent.width + z * dataExtent.width * dataExtent.height],
               dstSurface,
               x*sizeof(float),y,z); //also has boundaryMode as optional parameter
@@ -1125,27 +722,14 @@ __global__ void copyDeviceArrayToCudaArray_double(cudaSurfaceObject_t dstSurface
     infoMsg("src[%d][%d][%d] = %f", z,y,x,src[x + y * dataExtent.width + z * dataExtent.width * dataExtent.height]);
     //%f should work for doubles and floats, due to the float being promoted to double (at least in C)
 
-  //surf3Dwrite can't handle doubles directly
-  //how about long long int?
+  //surf3Dwrite can't handle doubles directly, so use long long
   long long int srcHereReinterpreted = __double_as_longlong(src[x + y * dataExtent.width + z * dataExtent.width * dataExtent.height]);
 
-  //uint2 hereUint2;
-  //hereUint2.= __double2
-
-  //double here = __hiloint2double(hereUint2.y, hereUint2.x);
-
   //doesn't work for double
-  surf3Dwrite(srcHereReinterpreted, //src[x + y * dataExtent.width + z * dataExtent.width * dataExtent.height],
+  surf3Dwrite(srcHereReinterpreted,
               dstSurface,
-              x,y,z); //also has boundaryMode as optional parameter
+              x,y,z); //Note: surf3Dwrite also has boundaryMode as optional parameter
 }
-
-//TODO
-/*
-__global__ void copyDeviceArrayToCudaArray_half(){
-
-}
-*/
 
 template<typename T, typename T4>
 __device__ __forceinline__ T4 make_T4(T x, T y, T z, T w);
@@ -1169,25 +753,17 @@ __global__ void copyDeviceArrayToCudaArray3D(cudaSurfaceObject_t dstSurface, cud
     int y = blockIdx.y*blockDim.y+threadIdx.y;
     int z = blockIdx.z*blockDim.z+threadIdx.z;
 
-    //x=0;
-    //y=0;
-    //z=0;
-
     if(x >= destExtent.width || y >= destExtent.height || z >= destExtent.depth)
       return;
 
     int num = x + y * destExtent.width + z * destExtent.width * destExtent.height;
-  /*
-    if(x%10==0 && y%10==0 && z%10==0)
-      infoMsg("src[%d][%d][%d] = %f", z,y,x,src[x + y * dataExtent.width + z * dataExtent.width * dataExtent.height]);
-      //%f should work for doubles and floats, due to the float being promoted to double (at least in C)
-  */
-    //won't work with doubles if this is here
+
+    //TODO: this won't work with doubles if this is here
     T4 srcVal = make_T4<T, T4>(src[num*3], src[num*3+1], src[num*3+2], 0);
 
     surf3Dwrite(srcVal,
                 dstSurface,
-                x*sizeof(T4),y,z); //also has boundaryMode as optional parameter
+                x*sizeof(T4),y,z); //Note: surf3Dwrite also has boundaryMode as optional parameter
 }
 
 extern "C" cudaError_t
@@ -1203,19 +779,11 @@ copyDeviceArrayToCudaArray3DWrapper_float(float* src, cudaArray* dest){
 
     cudaExtent destExtent;
     cudaChannelFormatDesc destChannelFormatDesc; //useless, but needed by cudaArrayGetInfo
-    unsigned int flags; //also useless
+    unsigned int flags; //also useless, but needed by cudaArrayGetInfo
 
     cudaArrayGetInfo(&destChannelFormatDesc, &destExtent, &flags, dest);
 
-    //printf("velocity destExtent (depth,height,width) = %d %d %d \n", destExtent.depth, destExtent.height, destExtent.width);
-    //printf("destChannelFormatDesc.x = %d;\ndestChannelFormatDesc.y = %d;\ndestChannelFormatDesc.z = %d;\ndestChannelFormatDesc.w = %d\n\n",
-    //       destChannelFormatDesc.x, destChannelFormatDesc.y, destChannelFormatDesc.z, destChannelFormatDesc.w);
-
-    //checkCudaErrors(cudaBindSurfaceToArray(dstSurface,)); //no, not this for surface objects
-
     checkCudaErrors(cudaCreateSurfaceObject(&dstSurface, &dstDesc));
-
-    //printf("Running copyDeviceArrayToCudaArray3DWrapper_float with <<<dim3( %d, %d, %d),dim3( %d, %d, %d)>>>\n", );
 
     copyDeviceArrayToCudaArray3D<float, float4><<<dim3(destExtent.width /THREADSPERBLOCK_X+(destExtent.width %THREADSPERBLOCK_X!=0),
                                                        destExtent.height/THREADSPERBLOCK_Y+(destExtent.height%THREADSPERBLOCK_Y!=0),
@@ -1243,20 +811,9 @@ copyDeviceArrayToCudaArrayWrapper_float(float* src, cudaArray* dest){
 
   cudaArrayGetInfo(&destChannelFormatDesc, &destExtent, &flags, dest);
 
-  //printf("destExtent (depth,height,width) = %d %d %d \n", destExtent.depth, destExtent.height, destExtent.width);
-
-  //checkCudaErrors(cudaBindSurfaceToArray(dstSurface,)); //no, not this for surface objects
-
   checkCudaErrors(cudaCreateSurfaceObject(&dstSurface, &dstDesc));
 
   copyDeviceArrayToCudaArray_float<<<dim3(BLOCKSIZE_X, BLOCKSIZE_Y, BLOCKSIZE_Z), dim3(THREADSPERBLOCK_X, THREADSPERBLOCK_Y, THREADSPERBLOCK_Z)>>>(dstSurface, destExtent, src);
-
-  //checkCudaErrors(cudaDeviceSynchronize());
-  /*cudaError_t cudaErr = cudaDeviceSynchronize();
-
-  if(cudaErr!=cudaSuccess){
-    printf("FAIL copyCudaArrayToDeviceArrayWrapper -%s \n",cudaGetErrorString(cudaErr));
-    return;}*/
 
   return cudaPeekAtLastError();
 }
@@ -1278,18 +835,9 @@ copyDeviceArrayToCudaArrayWrapper_double(double* src, cudaArray* dest){
 
   cudaArrayGetInfo(&destChannelFormatDesc, &destExtent, &flags, dest);
 
-  //checkCudaErrors(cudaBindSurfaceToArray(dstSurface,)); //no, not this for surface objects
-
   checkCudaErrors(cudaCreateSurfaceObject(&dstSurface, &dstDesc));
 
   copyDeviceArrayToCudaArray_double<<<dim3(BLOCKSIZE_X, BLOCKSIZE_Y, BLOCKSIZE_Z), dim3(THREADSPERBLOCK_X, THREADSPERBLOCK_Y, THREADSPERBLOCK_Z)>>>(dstSurface,destExtent,src);
-
-  //checkCudaErrors(cudaDeviceSynchronize());
-  /*cudaError_t cudaErr = cudaDeviceSynchronize();
-
-  if(cudaErr!=cudaSuccess){
-    printf("FAIL copyCudaArrayToDeviceArrayWrapper -%s \n",cudaGetErrorString(cudaErr));
-    return;}*/
 
   return cudaPeekAtLastError();
 }
@@ -1329,17 +877,8 @@ printDataCudaArrayContentsWrapper(cudaArray* data){
   checkCudaErrors(cudaCreateTextureObject(&dataTexture, &dataResourceDesc, &dataTextureDesc, NULL));
 
   printf("\nPrinting cudaArray contents...\n");
-
-  //these might need to be the other way around
-  //also they may need to be constant, or use templates
-
   printf("Running kernel with dim3( %d, %d, %d), dim3( %d, %d, %d)", BLOCKSIZE_X, BLOCKSIZE_Y, BLOCKSIZE_Z, THREADSPERBLOCK_X, THREADSPERBLOCK_Y, THREADSPERBLOCK_Z);
-
   printTextureContents<<<dim3(BLOCKSIZE_X, BLOCKSIZE_Y, BLOCKSIZE_Z), dim3(THREADSPERBLOCK_X, THREADSPERBLOCK_Y, THREADSPERBLOCK_Z)>>>(dataTexture, dataExtent);
-
-  //checkCudaErrors(cudaDeviceSynchronize());
-
-  //printTextureContents<<<dim3(MAXTEXTURESIZE_X/64+1, MAXTEXTURESIZE_Y/64+1, MAXTEXTURESIZE_Z/64+1), dim3(64,64,64)>>>(dataTexture, dataExtent);
 
   return cudaPeekAtLastError();
 }
@@ -1361,20 +900,12 @@ printfDebugWrapper(){
 extern "C" cudaError_t
 doPrintfWrapper(cudaTextureObject_t someTex, int i, int j, int k){
 
-  //printf("bek");
-
-  //doPrintf<<<10,10>>>(someTex, i, j, k);
-
   printfDebug<<<10,10>>>();
-/*
-  if(cudaDeviceSynchronize()!=cudaSuccess)
-    printf("FAIL");*/
   return cudaPeekAtLastError();
 }
 
 __global__ void printfArray(float* theArray, dim3 theArraySizes, int someFactor, dim3 printStride, bool printZeros){
 
-  //return;
   int x = blockIdx.x*blockDim.x+threadIdx.x;
   int y = blockIdx.y*blockDim.y+threadIdx.y;
   int z = blockIdx.z*blockDim.z+threadIdx.z;
@@ -1384,17 +915,10 @@ __global__ void printfArray(float* theArray, dim3 theArraySizes, int someFactor,
 
   int numEl = x + y * theArraySizes.x + z * theArraySizes.x * theArraySizes.y;
 
-  //printf("%d ", numEl);
-
-  //if(z % printStride.z || y % printStride.y || x % printStride.x)
-  //  return;
-
   if(theArray[numEl] == 0 && !printZeros)
     return;
 
-  printf("%d %d %d = %f\n", x, y, z, theArray[numEl]);//numEl/int(theArraySizes.y*theArraySizes.z), (numEl/int(theArraySizes.z))%(int(theArraySizes.y)), numEl%int(theArraySizes.z), theArray[numEl]);
-
-  //__syncthreads();
+  printf("%d %d %d = %f\n", x, y, z, theArray[numEl]);
 }
 
 ///<<<NumOfBlocks, NumOfThreadsPerBlock>>>
@@ -1416,16 +940,7 @@ extern "C" cudaError_t printfArrayWrapper(float* theArray, dim3 theArraySize, in
   return cudaPeekAtLastError();
 }
 
-//this is modified from tfluids/third_party/tfluids.cc/.cu
-//since we are breaking free of the OpenGL requirements for the velocity, could turn it into a float4 array or a triple float array
-//make it a triple float array
-//vel(i,j,k,l) would correspond to
-//what is b? b is the batch, which is not interesting for single batch 1D memory
-//mantaflow documentation might make this make sense
-// *****************************************************************************
-// setWallBcsForward
-// *****************************************************************************
-//chan
+//Modified from tfluids/third_party/tfluids.cc/.cu
 
 //this function should just overwrite the velocity in occupied cells with the obstacle velocities
 #define vel(d,h,w,chan) velocity[((d*(obstacleExtent.y+1) + h)*(obstacleExtent.x+1) + w)*3 + chan]
@@ -1464,31 +979,7 @@ __global__ void setWallBcsStaggered(T* obstacles, T* velocity, dim3 obstacleExte
     vel(i, j, k, 2) = 0;
   }
 
-  //instead if the isStick flag, we use a global flag in sticky (might change it to a grid flag eventually)
-/*
-  if (cur_fluid) {
-    if ((i > 0 && isStick(i - 1, j, k)) ||
-        (i < xsize() - 1 && isStick(i + 1, j, k))) {
-      vel(i, j, k, 1) = 0;
-      if (vel.is_3d()) {
-        vel(i, j, k, 2) = 0;
-      }
-    }
-    if ((j > 0 && isStick(i, j - 1, k)) ||
-        (j < ysize() - 1 && isStick(i, j + 1, k))) {
-      vel(i, j, k, 0) = 0;
-      if (vel.is_3d()) {
-        vel(i, j, k, 2) = 0;
-      }
-    }
-    if (vel.is_3d() &&
-        ((k > 0 && isStick(i, j, k - 1)) ||
-         (k < zsize() - 1 && isStick(i, j, k + 1)))) {
-      vel(i, j, k, 0) = 0;
-      vel(i, j, k, 1) = 0;
-    }
-  }
-*/
+  //instead of the isStick flag, we use a global flag in sticky (might change it to a grid flag eventually)
 }
 #undef obs
 #undef vel
@@ -1561,43 +1052,33 @@ extern "C" cudaError_t setWallsWrapper_half(void* obstacles, dim3 domainExtent, 
 
     printf("Half support not yet implemented (%s:%d)\n", __FILE__, __LINE__);
     exit(1);
-    /*
-    int totalThreads = domainExtent.x * domainExtent.y * domainExtent.z;
 
-    setWalls_half<<<totalThreads/BLOCK_SIZE, BLOCK_SIZE>>>(obstacles, domainExtent, thickness);
-    */
     return cudaPeekAtLastError();
 }
 
 template<typename T>
-__global__ void updateObstacles(dim3 obstacleExtent){//T* obstacles, T* velocityIn, dim3 obstacleExtent){
+__global__ void updateObstacles(dim3 obstacleExtent){
 
-    //does nothing, can update for whatever time-dependent obstacles we need
-    //this will require changes to setWallBcsStaggered
-    //if Unity is used, need to get movement from it
-    //not sure there's an easy way to do rapid voxelization using Unity objects
-    //could try sending the global positions of all the vertices, alaos the faces and edges, and doing it in CUDA somehow
-    //in the first phase, could just use a simple-geometry object that can be voxelized trivially
-    //this should also update the voxel speed, wherever they're contained
+    //TODO: this should be updated depending on how obstacles are implemented
 }
 
-extern "C" cudaError_t updateObstaclesDNWrapper_float(dim3 obstacleExtent){//float* obstacles, float* velocityIn, dim3 obstacleExtent){
+extern "C" cudaError_t updateObstaclesDNWrapper_float(dim3 obstacleExtent){
 
     int D = obstacleExtent.z;
     int H = obstacleExtent.y;
     int W = obstacleExtent.x;
 
-    updateObstacles<float><<<D*H*W/BLOCK_SIZE,BLOCK_SIZE>>>(obstacleExtent);//obstacles, velocityIn, obstacleExtent);
+    updateObstacles<float><<<D*H*W/BLOCK_SIZE,BLOCK_SIZE>>>(obstacleExtent);
     return cudaPeekAtLastError();
 }
 
-extern "C" cudaError_t updateObstaclesDNWrapper_double(dim3 obstacleExtent){//double* obstacles, double* velocityIn, dim3 obstacleExtent){
+extern "C" cudaError_t updateObstaclesDNWrapper_double(dim3 obstacleExtent){
 
     int D = obstacleExtent.z;
     int H = obstacleExtent.y;
     int W = obstacleExtent.x;
 
-    updateObstacles<double><<<D*H*W/BLOCK_SIZE,BLOCK_SIZE>>>(obstacleExtent);//obstacles, velocityIn, obstacleExtent);
+    updateObstacles<double><<<D*H*W/BLOCK_SIZE,BLOCK_SIZE>>>(obstacleExtent);
     return cudaPeekAtLastError();
 }
 
@@ -1605,11 +1086,7 @@ extern "C" cudaError_t updateObstaclesDNWrapper_half(dim3 obstacleExtent){
 
     printf("Half support not yet implemented (%s:%d)\n", __FILE__, __LINE__);
     exit(1);
-    //int D = obstacleExtent.z;
-    //int H = obstacleExtent.y;
-    //int W = obstacleExtent.x;
 
-    //updateObstacles<float><<<D*H*W/BLOCK_SIZE,BLOCK_SIZE>>>();
     return cudaPeekAtLastError();
 }
 
