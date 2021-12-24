@@ -4,7 +4,6 @@
 #include "vmath.hpp"
 #include "pez.h"
 #include <sstream>
-//#include "gl3.h"
 
 enum AttributeSlot {
     SlotPosition,

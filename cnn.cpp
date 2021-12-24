@@ -1875,8 +1875,6 @@ DefaultNet<T>::DefaultNet(std::string fileName, bool isBinary, int inputSize[], 
     }
 
     makeNet(inputSize, numBanks, bankLength);
-
-    //exit(0);
 }
 
 extern "C" cudaError_t printSingleElementWrapper_float(float* deviceArray, size_t numSizes, int* sizes, int* elementToGet);
@@ -1939,8 +1937,6 @@ void Layer<T>::print(){
                         int index = ia[0];
                         for(int i=1;i<5;i++)
                             index = index * this->tensorDims[i] + ia[i];
-                        //if(inputTensorCPU[index] != 0.0f)
-                        //    printf("input[%d][%d][%d][%d][%d] = %f, index = %d\n", ia[0], ia[1], ia[2], ia[3], ia[4], double(inputTensorCPU[index]), index); //%f is used for both float and double, half needs to be converted
                         if(outputTensorCPU[index] != 0.0f)
                             infoMsg("output[%d][%d][%d][%d][%d] = %f, index = %d\n", ia[0], ia[1], ia[2], ia[3], ia[4], double(outputTensorCPU[index]), index); //%f is used for both float and double, half needs to be converted
                     }

@@ -6,19 +6,15 @@
 #include <vector>
 #include <string>
 
-//this might need a second version if you want the ToyCNN to still work
+//TODO: this might need a second version if you want the ToyCNN to still work
 class ToyMaxPoolLayer3D
 {
 public:
-  //int size[3] = {0,0,0}, stride[3] = {0,0,0};
 
   std::vector<int> size;
   std::vector<int> stride;
   ToyMaxPoolLayer3D(std::vector<int> size_, std::vector<int> stride_);
   ToyMaxPoolLayer3D();
-
-  //MaxPoolLayer3D(int size_[], int stride_[]); //this  gives them an initial value when the constructor is called, even though they are const
-  //MaxPoolLayer3D();
 };
 
 class ToyCNN
@@ -27,7 +23,6 @@ public:
   void getTensorValuesFromFile(std::string fileName);
 
   cudnnHandle_t cudnnHandle;
-  //cublasHandle_t cublasHandle;
 
   ToyMaxPoolLayer3D poolDown, poolUp, poolEqual;
 
@@ -39,16 +34,9 @@ public:
 
   dim3 inputSize, hiddenLayerSize;
 
-  //float *dataToy, *hiddenToy; //this is to check whether float* works; cudaArray might not
-
-  //std::unique_ptr<float*> dataToyHost;
-  //std::unique_ptr<float*> hiddenToyHost;
-
   std::vector<float> dataToyHost;
   std::vector<float> hiddenToyHost;
   std::vector<float> targetToyHost;
-
-  //std::vector<float> targetToyTensor;
 
   const dim3 dataToyHostSize = dim3(64,64,64);
   const dim3 hiddenToyHostSize = dim3(32,32,32);
@@ -67,38 +55,6 @@ public:
 
   void ForwardPropagation(cudaArray *data, cudaArray *target);
 };
-/*
-class CNN
-{
-public:
-  cudnnHandle_t cudnnHandle;
-  cublasHandle_t cublasHandle;
-
-  cudnnTensorDescriptor_t dataTensor, conv1Tensor, conv1BiasTensor, pool1Tensor,
-      conv2Tensor, conv2BiasTensor, pool2Tensor, fc1Tensor, fc2Tensor;
-  cudnnFilterDescriptor_t conv1filterDesc, conv2filterDesc;
-  cudnnConvolutionDescriptor_t conv1Desc, conv2Desc;
-  cudnnConvolutionFwdAlgo_t conv1algo, conv2algo;
-  cudnnConvolutionBwdFilterAlgo_t conv1bwfalgo, conv2bwfalgo;
-  cudnnConvolutionBwdDataAlgo_t conv2bwdalgo;
-  cudnnPoolingDescriptor_t poolDesc;
-  cudnnActivationDescriptor_t fc1Activation;
-
-  int m_gpuid;
-  int m_batchSize;
-  size_t m_workspaceSize;
-
-  FullyConnectedLayer& ref_fc1, &ref_fc2;
-
-  // Disable copying
-  CNN& operator=(const CNN&) = delete;
-  CNN(const CNN&) = delete;
-
-  CNN();
-  ~CNN();
-
-};
-*/
 
 class MaxPoolLayer
 {

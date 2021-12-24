@@ -1,21 +1,16 @@
 #include <toycnn.h>
 
 ///
-/// \brief ToyCNN::ToyCNN
+/// \brief ToyCNN::ToyCNN - simple test CNN for debugging
 /// \details Constructor. hiddenLayerSize should be half the size of divergenceSize, in all dimensions.
 /// \param divergenceSize
 /// \param hiddenLayerSize
 ///
 ToyCNN::ToyCNN(dim3 inputSize_, dim3 hiddenLayerSize_){
 
-  //ToyCNN::getTensorValuesFromFile("/home/vmiu/2018/cnn_fluid/FluidNet/torch/modelContents_17-05-18_19-58-26.txt");
-
-  //exit(0);
-
   inputSize = inputSize_;
   hiddenLayerSize = hiddenLayerSize_;
 
-  //checkCudaErrors(cublasCreate(&cublasHandle));
   checkCUDNN(cudnnCreate(&cudnnHandle));
 
   std::vector<int> sizeVect = {2,2,2};
@@ -29,10 +24,10 @@ ToyCNN::ToyCNN(dim3 inputSize_, dim3 hiddenLayerSize_){
 
   //maybe these should be stored somewhere
   int hiddenTensorSize[] = {1,1,hiddenLayerSize.x,hiddenLayerSize.y,hiddenLayerSize.z};
-  int hiddenTensorStride[] = {1,1,1,hiddenLayerSize.x,hiddenLayerSize.x*hiddenLayerSize.y}; //{2,2,2,2,2} (incorrect because need to skip a slice or a row to advance in z or y)
+  int hiddenTensorStride[] = {1,1,1,hiddenLayerSize.x,hiddenLayerSize.x*hiddenLayerSize.y};
 
   int dataTensorSize[] = {1,1,inputSize.x,inputSize.y,inputSize.z};
-  int dataTensorStride[] = {1,1,1,inputSize.x,inputSize.y*inputSize.x}; //{1,1,1,1,1}
+  int dataTensorStride[] = {1,1,1,inputSize.x,inputSize.y*inputSize.x};
 
   int targetTensorSize[] = {1,1,inputSize.x,inputSize.y,inputSize.z};
   int targetTensorStride[] = {1,1,1,inputSize.x,inputSize.y*inputSize.x};
@@ -42,9 +37,6 @@ ToyCNN::ToyCNN(dim3 inputSize_, dim3 hiddenLayerSize_){
 
   int nothingPoolingTensorSize[] = {1,1,hiddenLayerSize.x,hiddenLayerSize.y,hiddenLayerSize.z};
   int nothingPoolingTensorStride[] = {1,1,1,hiddenLayerSize.x,hiddenLayerSize.y*hiddenLayerSize.x};
-
-  //printf("inputLayerSize  %d %d %d\n", inputSize.x, inputSize.y, inputSize.z);
-  //printf("hiddenLayerSize %d %d %d\n", hiddenLayerSize.x, hiddenLayerSize.y, hiddenLayerSize.z);
 
   checkCUDNN(cudnnCreateTensorDescriptor(&dataTensor));
   checkCUDNN(cudnnCreateTensorDescriptor(&hiddenTensor));
@@ -97,9 +89,9 @@ ToyCNN::ToyCNN(dim3 inputSize_, dim3 hiddenLayerSize_){
                                          CUDNN_POOLING_MAX,
                                          CUDNN_PROPAGATE_NAN,
                                          3, //dimension
-                                         &(poolDown.size)[0],//&(poolDown.size)[0],
+                                         &(poolDown.size)[0],
                                          zeroVect,
-                                         &(poolDown.stride)[0]));//&(poolDown.stride)[0])); //the last 3 are int[] of length 3
+                                         &(poolDown.stride)[0])); //the last 3 are int[] of length 3
 
   checkCUDNN(cudnnSetPoolingNdDescriptor(poolUpDesc,
                                          CUDNN_POOLING_MAX,
@@ -118,49 +110,13 @@ ToyCNN::ToyCNN(dim3 inputSize_, dim3 hiddenLayerSize_){
                                          zeroVect,
                                          &(poolEqual.stride)[0])); //the last 3 are int[] of length 3
 
-/*
-  checkCUDNN(cudnnSetPoolingNdDescriptor(nothingDesc,
-                                         CUDNN_POOLING_MAX,
-                                         CUDNN_PROPAGATE_NAN,
-                                         3, //dimension
-                                         poolUp.size,
-                                         poolUp.padding,
-                                         poolUp.stride)); //the last 3 are int[] of length 3*/
-
-  //hiddenDesc = cudaCreateChannelDesc(32,0,0,0,cudaChannelFormatKindFloat); //this might need replacing with memset(&hiddenDesc,0,sizeof(hiddenDesc))
-  //hiddenDesc.res.array.array = hidden;
-  //hiddenDesc.resType = cudaResourceTypeArray;
-
-  //allocate the hidden layer memory
-  //cudaExtent hiddenLayerExtent = make_cudaExtent(hiddenLayerSize.x,hiddenLayerSize.y,hiddenLayerSize.z);
-  //checkCudaErrors(cudaMalloc3DArray(&hidden,&hiddenDesc,hiddenLayerExtent,cudaArrayDefault)); //hiddenLayerSize may need to be converted to cudaExtent
-
-  //std::unique_ptr<float[]> dataToyHost(new float[64*64*64]);
-  //std::unique_ptr<float[]> hiddenToyHost(new float[32*32*32]);
-
   dataToyHost = std::vector<float>(64*64*64);
   hiddenToyHost = std::vector<float>(32*32*32);
   targetToyHost = std::vector<float>(64*64*64);
 
   for(int i=0;i<64*64*64;i++)
-    //for(int j=0;j<64;j++)
-      //for(int k=0;k<64;k++)
-        dataToyHost[i] = i;//*64*64 + j*64 + k;
-/*
-  for(int i=0;i<32*32*32;i++)
-    //for(int j=0;j<32;j++)
-      //for(int k=0;k<32;k++)
-        hiddenToyHost[i] = i;//*32*32 + j*32 + k;
-*/
+    dataToyHost[i] = i;
 }
-
-/*
-MaxPoolLayer3D::MaxPoolLayer3D(){
-
-  size = new int[3];
-  stride = new int[3];
-}
-*/
 
 extern "C" void
 copyCudaArrayToDeviceArrayWrapper_float(cudaArray* src, float* dst);
@@ -177,8 +133,6 @@ copyCudaArrayToDeviceArrayWrapper_float(cudaArray* src, float* dst);
 /// \param target
 ///
 void ToyCNN::ForwardPropagation(cudaArray* data, cudaArray* target){
-
-  //printDataCudaArrayContentsWrapper(data);
 
   if(cudaDeviceSynchronize()!=cudaSuccess){
     printf("FAIL texture printing  \n");
@@ -205,21 +159,18 @@ void ToyCNN::ForwardPropagation(cudaArray* data, cudaArray* target){
   int totalInputSize = inputSize.x * inputSize.y * inputSize.z;
   int totalHiddenSize = hiddenLayerSize.x * hiddenLayerSize.y * hiddenLayerSize.z;
 
-  checkCudaErrors(cudaMalloc(&dataToy,  sizeof(float) * dataExtent.width * dataExtent.height * dataExtent.depth));// * inputSize.x * inputSize.y * inputSize.z));
-  checkCudaErrors(cudaMalloc(&hiddenToy,sizeof(float) * hiddenToyHost.size()));// * hiddenLayerSize.x * hiddenLayerSize.y * hiddenLayerSize.z));
+  checkCudaErrors(cudaMalloc(&dataToy,  sizeof(float) * dataExtent.width * dataExtent.height * dataExtent.depth));
+  checkCudaErrors(cudaMalloc(&hiddenToy,sizeof(float) * hiddenToyHost.size()));
   checkCudaErrors(cudaMalloc(&targetToy,sizeof(float) * targetToyHost.size()));
   checkCudaErrors(cudaMalloc(&nothingDataToy,sizeof(float) * dataToyHost.size()));
   checkCudaErrors(cudaMalloc(&nothingPoolingToy,sizeof(float) * hiddenToyHost.size()));
 
-  printf("totalInputSize %d", totalInputSize);
+  infoMsg("totalInputSize %d", totalInputSize);
 
 #define W 10
 #define H 10
 
   copyCudaArrayToDeviceArrayWrapper_float(data, dataToy);
-  //printElementWrapper();
-
-  //printfArrayWrapper(dataToy, dim3(dataExtent.width, dataExtent.height, dataExtent.depth));
 
   if(cudaDeviceSynchronize()!=cudaSuccess){
     printf("FAIL copyCudaArrayToDeviceArrayWrapper_float \n");
@@ -232,7 +183,7 @@ void ToyCNN::ForwardPropagation(cudaArray* data, cudaArray* target){
     return;}
 
   //toy testing attempt
-  checkCUDNN(cudnnPoolingForward(cudnnHandle, poolDownDesc, &alpha, dataTensor, dataToy, &beta, hiddenTensor, hiddenToy)); //checkCUDNN(cudnnPoolingForward(cudnnHandle, poolDownDesc, &alpha, dataTensor, dataToy, &beta, hiddenTensor, hiddenToy));
+  checkCUDNN(cudnnPoolingForward(cudnnHandle, poolDownDesc, &alpha, dataTensor, dataToy, &beta, hiddenTensor, hiddenToy));
 
   cudaError_t cudaErr = cudaDeviceSynchronize();
 
@@ -240,16 +191,11 @@ void ToyCNN::ForwardPropagation(cudaArray* data, cudaArray* target){
     printf("FAIL -%s \n",cudaGetErrorString(cudaErr));
     return;}
 
-  //checkCUDNN(cudnnPoolingBackward(cudnnHandle, poolDownDesc, &alpha, hiddenTensor, hiddenToy, nothingPoolingTensor, nothingPoolingToy, targetTensor, targetToy, &beta, nothingDataTensor, nothingDataToy)); //replace each first NULL with nothingTensor (or whatever tensor descriptor is needed)
-
-  //checkCUDNN(cudnnPoolingForward(cudnnHandle, poolDownDesc, &alpha, dataTensor, dataToy, &beta, hiddenTensor, hiddenToy));
-
   if(cudaDeviceSynchronize()!=cudaSuccess){
     printf("FAIL\n");
     return;}
 
   printf("hiddenToy:\n\n");
-  //printfArrayWrapper(hiddenToy, hiddenToyHostSize);
 
   cudaDeviceSynchronize();
 }
@@ -257,7 +203,6 @@ void ToyCNN::ForwardPropagation(cudaArray* data, cudaArray* target){
 ToyCNN::~ToyCNN(){
 
   checkCUDNN(cudnnDestroy(cudnnHandle));
-  //checkCudaErrors(cublasDestroy(cublasHandle)); //two CuBLAS handles are probably a bad idea
 
   checkCUDNN(cudnnDestroyTensorDescriptor(dataTensor));
   checkCUDNN(cudnnDestroyTensorDescriptor(hiddenTensor));
@@ -282,7 +227,7 @@ ToyMaxPoolLayer3D::ToyMaxPoolLayer3D(){
 
 }
 
-ToyMaxPoolLayer3D::ToyMaxPoolLayer3D(std::vector<int> size_, std::vector<int> stride_){// : size(size_), stride(stride_) {}
+ToyMaxPoolLayer3D::ToyMaxPoolLayer3D(std::vector<int> size_, std::vector<int> stride_){
 
   size = size_;
   stride = stride_;

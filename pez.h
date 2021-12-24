@@ -9,15 +9,11 @@ extern "C" {
 #define PEZ_DROP_HANDLER 1
 #define GL3_PROTOTYPES
 
-//gl3.h conflicts with cuda_gl_interop.h
-//#include "gl3.h"
+//gl3.h conflicts with cuda_gl_interop.h, so don't include it
 #define GL_GLEXT_PROTOTYPES
 #include <GL/glew.h>
 #include <GL/glxew.h>
 #include <GL/gl.h>
-//#include <GL/glext.h>
-//#include <GL/glx.h>
-//#include <GL/glxext.h>
 #include <cuda_gl_interop.h>
 #include <stdbool.h>
 

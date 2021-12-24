@@ -1,16 +1,5 @@
 // Pez was developed by Philip Rideout and released under the MIT License.
 
-//#include <GL/glew.h>
-//#include <GL/glx.h>
-//#include <GL/glxext.h>
-//#include <GL/glext.h>
-//#include <GL/glu.h>
-//#include <GL/glut.h>
-
-//#include <GL/glew.h>
-//#include <GL/gl.h>
-//#include <GL/glx.h>
-
 #include "pez.h"
 #include "bstrlib.h"
 #include <sys/time.h>
@@ -82,9 +71,6 @@ int main(int argc, char** argv)
             int samp_buf, samples;
             glXGetFBConfigAttrib( context.MainDisplay, fbc[i], GLX_SAMPLE_BUFFERS, &samp_buf );
             glXGetFBConfigAttrib( context.MainDisplay, fbc[i], GLX_SAMPLES       , &samples  );
-            //printf( "  Matching fbconfig %d, visual ID 0x%2x: SAMPLE_BUFFERS = %d,"
-            //        " SAMPLES = %d\n",
-            //        i, (unsigned int) vi->visualid, samp_buf, samples );
             if ( best_fbc < 0 || (samp_buf && samples > best_num_samp) )
                 best_fbc = i, best_num_samp = samples;
             if ( worst_fbc < 0 || !samp_buf || samples < worst_num_samp )
@@ -113,11 +99,10 @@ int main(int argc, char** argv)
         visinfo->depth,
         InputOutput,
         visinfo->visual,
-        CWBackPixel | /*CWBorderPixel |*/ CWColormap | CWEventMask,
+        CWBackPixel | CWColormap | CWEventMask,
         &attr
     );
 
-    //int borderless = 1;
     int borderless = 0;
     if (borderless) {
         Atom mwmHintsProperty = XInternAtom(context.MainDisplay, "_MOTIF_WM_HINTS", 0);
@@ -233,12 +218,10 @@ int main(int argc, char** argv)
             switch (event.type)
             {
                 case Expose:
-                    //redraw(display, event.xany.window);
                     break;
 
                 case ConfigureNotify:
-                    //resize(event.xconfigure.width, event.xconfigure.height);
-                    //break;
+                    break;
 
 #ifdef PEZ_MOUSE_HANDLER
                 case ButtonPress:
@@ -266,7 +249,6 @@ int main(int argc, char** argv)
                     XQueryKeymap(context.MainDisplay, keys);
                     if(keys[controlKey/8]&(0x1<<(controlKey%8))){
                         controlDown = true;
-                        //printf("\n\n\n\n\nMARK LCTRL\n\n\n\n\n");
                     }
                     else
                         controlDown = false;
@@ -275,7 +257,6 @@ int main(int argc, char** argv)
 #endif
 
                 case KeyRelease: {
-//              case KeyPress: {
                     XComposeStatus composeStatus;
                     char asciiCode[32];
                     KeySym keySym;

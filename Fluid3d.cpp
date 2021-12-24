@@ -82,7 +82,7 @@ static float Fips = -4;
 
 GLuint bufferID;
 struct cudaGraphicsResource *cuda_buffer_resource, *pressurePing_buffer_resource,
-        *pressurePong_buffer_resource, *divergence_buffer_resource, *obstacles_buffer_resource;//*cuda_fbo_resource; //handles OpenGL-CUDA exchange
+        *pressurePong_buffer_resource, *divergence_buffer_resource, *obstacles_buffer_resource; //handles OpenGL-CUDA exchange
 
 struct cudaGraphicsResource *pressurePing_texture_resource, *pressurePong_texture_resource,
         *divergence_texture_resource, *obstacles_texture_resource, *obstacleSpeeds_texture_resource, *velocityPing_texture_resource, *velocityPong_texture_resource;
@@ -150,7 +150,7 @@ void PezInitialize()
         }
 
         if(deviceToUse == -1){
-            printf("Device "+ deviceToFind +" not found. May need to change device name (deviceToFind) in PezInitialize in Fluid3d.cpp; use cudaGetDeviceProperties for device from 0 to cudaGetDeviceCount-1 to see the names of available GPUs on your system.\n");
+            printf("Device %s not found. May need to change device name (deviceToFind) in PezInitialize in Fluid3d.cpp; use cudaGetDeviceProperties for device from 0 to cudaGetDeviceCount-1 to see the names of available GPUs on your system.\n", deviceToFind.c_str());
             exit(0);
         }
 
@@ -212,11 +212,7 @@ void PezInitialize()
     if(err != GL_NO_ERROR)
         pezCheck(0,errorBuffer.str().c_str());
 
-    //if(useStaggered)
-        Slabs.Velocity = CreateSlab(GridWidth + 1, GridHeight + 1, GridDepth + 1, 3); //for a staggered grid. This creates some unused velocity indices, but
-    //that is not easily corrected with how textures are implemented
-    //else
-    //    Slabs.Velocity = CreateSlab(GridWidth, GridHeight, GridDepth, 3);
+    Slabs.Velocity = CreateSlab(GridWidth + 1, GridHeight + 1, GridDepth + 1, 3); //for a staggered grid. This creates some unused velocity indices
 
     Slabs.Density = CreateSlab(GridWidth, GridHeight, GridDepth, 1);
     Slabs.Pressure = CreateSlab(GridWidth, GridHeight, GridDepth, 1);
@@ -225,10 +221,7 @@ void PezInitialize()
     Surfaces.LightCache = CreateVolume(GridWidth, GridHeight, GridDepth, 1);
     Surfaces.BlurredDensity = CreateVolume(GridWidth, GridHeight, GridDepth, 1);
 
-    //if(useStaggered)
-    //    InitSlabOps();
-    //else
-        InitSlabOpsNotStaggered();
+    InitSlabOpsNotStaggered();
     Surfaces.Obstacles = CreateVolume(GridWidth, GridHeight, GridDepth, 1);
 
     //if ObstacleSpeeds is a surface, it needs to know the time from first timer call
@@ -256,8 +249,6 @@ void PezInitialize()
 
     //the pressurePong cudaArray needs to be associated with a surface object in order to be editable
     //might not work because cudaArray was not created with the cudaArraySurfaceLoadStore flag
-
-    //pressurePingResDesc = cudaCreateChannelDesc(32,0,0,0,cudaChannelFormatKindFloat);
     memset(&pressurePingResDesc, 0, sizeof(pressurePingResDesc));
     pressurePingResDesc.resType = cudaResourceTypeArray;
 
@@ -273,7 +264,6 @@ void PezInitialize()
     memset(&divergenceResDesc, 0, sizeof(divergenceResDesc));
     divergenceResDesc.resType = cudaResourceTypeArray;
 
-    //obstaclesResDesc = cudaCreateChannelDesc(32,32,32,0,cudaChannelFormatKindFloat);
     memset(&obstaclesResDesc, 0, sizeof(obstaclesResDesc));
     obstaclesResDesc.resType = cudaResourceTypeArray;
 
@@ -401,9 +391,6 @@ void swapCudaBuffers(float *&a, float*&b){
     a = b;
     b = temp;
 }
-
-//this is in cnn.cu (at least for now) (contains nothing right now)
-//extern "C" cudaError_t updateObstaclesWrapper_float(dim3 obstacleExtent);
 
 //these are in Fluid3d.cu
 //velocitySize is used where it's used so we don't need two functions for staggered and non-staggered
@@ -856,8 +843,6 @@ void Jacobi_CUDA_wrapper(SurfacePod pressurePing, SurfacePod divergence, Surface
     //surface object creation and binding might only be required once (you don't need it when using cudaCreateSurfaceObject)
 
     checkCudaErrors(cudaCreateSurfaceObject(&pressurePongSurf, &pressurePongResDesc));
-
-    //checkCudaErrors(cudaBindSurfaceToArray(&pressurePongSurf, pressurePongCudaArray, &pressurePingFormat));
 
     //do the CUDA implementation of the Jacobi projection method
     float alpha = -CellSize * CellSize;

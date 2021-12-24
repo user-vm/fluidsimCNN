@@ -314,7 +314,6 @@ private:
   T* workspace;
   size_t workspaceSizeInBytes;
   float beta;
-  //cudnnTensorDescriptor_t tensorDesc;
 };
 
 template<typename T>
@@ -325,8 +324,6 @@ class ScalingLayer3D: public Layer<T>{
 
 public:
   //THIS IS FOR MULTIPLICATION BY A SCALAR, you use it when you divide by the standard deviation
-  //cuBLAS seems to have scaling capabilities, look into it ()
-  //use cudnnScaleTensor
 
   T scaleFactor;
 
@@ -386,10 +383,8 @@ public:
 private:
   std::string layerType = "NormScalingLayer3D";
 
-  //virtual void forward();
 protected:
   NormScalingLayer3D();
-  //void *(reduceSummationWrapper)();
 };
 
 template<typename T>
@@ -399,7 +394,6 @@ template<typename T>
 class ScaleByInverseNormLayer3D: public NormScalingLayer3D<T>{
 
 public:
-  //ScaleByInverseNormLayer3D();
 
   void forward();
 
@@ -453,13 +447,10 @@ public:
 
   ConvBiasLayer3D(std::vector<int> filterSize, std::vector<T> filterData, std::vector<int> biasSize, std::vector<T> biasDataCPU, std::string activationMode = "ReLU", double _coef = 0.0);
 
-  //void allocateTensor();
-
   void* workspace;
   size_t workspaceSizeInBytes;
 
   cudnnTensorDescriptor_t biasTensorDesc; //otherTensorDesc
-  //void* biasTensorData; //otherTensorData
 
   cudnnActivationDescriptor_t activationDescriptor;
   static std::unordered_map<std::string, cudnnActivationMode_t> activationModeMap;

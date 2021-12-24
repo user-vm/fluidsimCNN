@@ -50,9 +50,6 @@
     if (status != CUDNN_STATUS_SUCCESS) {                              \
       std::cout << "CUDNN failure: " << cudnnGetErrorString(status)<< " in file "<<__FILE__<<" on line "<<__LINE__<<std::endl;      \
       exit(1); \
-      /*const std::string errorStr = _error.str();*/ \
-      /*printf();*/ \
-      /*exit(1);*/ \
     }                                                                  \
 } while(0)
 
@@ -70,9 +67,6 @@ T checkPrint(T result, char const *const func, const char *const file, int const
     {
         fprintf(stderr, "CUDA error at %s:%d code=%d(%s) \"%s\" \n",
                 file, line, static_cast<unsigned int>(result), _cudaGetErrorEnum(result), func);
-        //DEVICE_RESET
-        // Make sure we call CUDA Device Reset before exiting
-        //exit(EXIT_FAILURE);
     }
 
     return result;
